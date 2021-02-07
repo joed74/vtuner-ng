@@ -386,7 +386,7 @@ void vtunerc_unregister_ctrldev(struct vtunerc_config *config)
 
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response)
 {
-	//dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
+	dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
 	if (down_interruptible(&ctx->xchange_sem))
 		return -ERESTARTSYS;
 
@@ -395,7 +395,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 		up(&ctx->xchange_sem);
 		return 0;
 	}
-	//dprintk(ctx, "XCH_MSG: %d: continue\n", msg->type);
+	dprintk(ctx, "XCH_MSG: %d: continue\n", msg->type);
 
 #if 0
 	BUG_ON(ctx->ctrldev_request.type != -1);
@@ -414,7 +414,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 		return 0;
 
 	if (wait_event_interruptible(ctx->ctrldev_wait_response_wq, ctx->ctrldev_response.type != -1)) {
-		//dprintk(ctx, "XCH_MSG: %d: wait_event interrupted\n", msg->type);
+		dprintk(ctx, "XCH_MSG: %d: wait_event interrupted\n", msg->type);
 		ctx->ctrldev_request.type = -1;
 		up(&ctx->xchange_sem);
 		return -ERESTARTSYS;
@@ -422,7 +422,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 
 	BUG_ON(ctx->ctrldev_response.type == -1);
 
-	//dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
+	dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
 	memcpy(msg, &ctx->ctrldev_response, sizeof(struct vtuner_message));
 	ctx->ctrldev_response.type = -1;
 
