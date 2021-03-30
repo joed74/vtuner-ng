@@ -109,7 +109,7 @@ static int pidtab_del_pid(unsigned short *pidtab, int pid)
 static void pidtab_copy_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
 {
 	int i;
-	
+
 	for (i = 0; i < MAX_PIDTAB_LEN ; i++)
 		msg->body.pidlist[i] = ctx->pidtab[i]; /*TODO: optimize it*/
 	/* msg->body.pidlist[MAX_PIDTAB_LEN - 1] = 0; */
@@ -349,7 +349,6 @@ static int __init vtunerc_init(void)
 			sprintf(procfilename, VTUNERC_PROC_FILENAME,
 					ctx->idx);
 			ctx->procname = my_strdup(procfilename);
-#if 0
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
 			if (proc_create_data(ctx->procname, 0, NULL, &vtunerc_read_proc_fops, ctx) == 0)
@@ -357,7 +356,6 @@ static int __init vtunerc_init(void)
 			if (proc_create_data(ctx->procname, 0, NULL, &vtunerc_read_proc_ops, ctx) == 0)
 #endif
 				printk(KERN_WARNING "vtunerc%d: Unable to register '%s' proc file\n", ctx->idx, ctx->procname);
-#endif
 
 		}
 #endif

@@ -69,7 +69,8 @@ struct vtunerc_ctx {
 
 	/* internals */
 	int idx;
-	char *name;
+	char *fe_name;
+	char *fe_type;
 	u8 vtype;
 	struct dvb_frontend_info *feinfo;
 	struct vtunerc_config *config;

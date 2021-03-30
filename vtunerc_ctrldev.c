@@ -173,23 +173,23 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 
 	switch (cmd) {
 	case VTUNER_SET_NAME:
-		dprintk(ctx, "msg VTUNER_SET_NAME\n");
-		len = strlen((char *)arg) + 1;
-		ctx->name = kmalloc(len, GFP_KERNEL);
-		if (ctx->name == NULL) {
+		dprintk(ctx, "IOCTL VTUNER_SET_NAME\n");
+		len = sizeof((char *)arg);
+		ctx->fe_name = kmalloc(len, GFP_KERNEL);
+		if (ctx->fe_name == NULL) {
 			printk(KERN_ERR "vtunerc%d: no memory\n", ctx->idx);
 			ret = -ENOMEM;
 			break;
 		}
-		if (copy_from_user(ctx->name, (char *)arg, len)) {
-			kfree(ctx->name);
+		if (copy_from_user(ctx->fe_name, (char *)arg, len)) {
+			kfree(ctx->fe_name);
 			ret = -EFAULT;
 			break;
 		}
 		break;
 
 	case VTUNER_SET_MODES:
-		dprintk(ctx, "msg VTUNER_SET_MODES\n");
+		dprintk(ctx, "IOCTL VTUNER_SET_MODES\n");
 		for (i = 0; i < ctx->num_modes; i++)
 			ctx->ctypes[i] = &(((char *)(arg))[i*32]);
 		if (ctx->num_modes != 1) {
@@ -204,24 +204,33 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 	fallthrough;
 #endif
 	case VTUNER_SET_TYPE:
-		dprintk(ctx, "msg VTUNER_SET_TYPE\n");
-		if (strcasecmp((char *)arg, "DVB-S") == 0) {
+		dprintk(ctx, "IOCTL VTUNER_SET_TYPE\n");
+		len = sizeof((char *)arg);
+		ctx->fe_type = kmalloc(len, GFP_KERNEL);
+		if (ctx->fe_type == NULL) {
+			printk(KERN_ERR "vtunerc%d: no memory\n", ctx->idx);
+			ret = -ENOMEM;
+			break;
+		}
+		if (copy_from_user(ctx->fe_type, (char *)arg, len)) {
+			kfree(ctx->fe_type);
+			ret = -EFAULT;
+			break;
+		}
+		if (strcasecmp(ctx->fe_type, "DVB-S") == 0) {
 			vtype = VT_S;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-S tuner vtype\n", ctx->idx);
-		} else
-		if (strcasecmp((char *)arg, "DVB-S2") == 0) {
+		} else if (strcasecmp(ctx->fe_type, "DVB-S2") == 0) {
 			vtype = VT_S2;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-S2 tuner vtype\n", ctx->idx);
-		} else
-		if (strcasecmp((char *)arg, "DVB-T") == 0) {
+		} else if (strcasecmp(ctx->fe_type, "DVB-T") == 0) {
 			vtype = VT_T;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-T tuner vtype\n", ctx->idx);
-		} else
-		if (strcasecmp((char *)arg, "DVB-C") == 0) {
+		} else if (strcasecmp(ctx->fe_type, "DVB-C") == 0) {
 			vtype = VT_C;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-C tuner vtype\n", ctx->idx);
 		} else {
-			printk(KERN_ERR "vtunerc%d: unregognized tuner vtype '%s'\n", ctx->idx, (char *)arg);
+			printk(KERN_ERR "vtunerc%d: unregognized tuner vtype '%s'\n", ctx->idx, ctx->fe_type);
 			ret = -ENODEV;
 			break;
 		}
@@ -237,7 +246,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 
 
 	case VTUNER_SET_FE_INFO:
-		dprintk(ctx, "msg VTUNER_SET_FE_INFO\n");
+		dprintk(ctx, "IOCTL VTUNER_SET_FE_INFO\n");
 		len = sizeof(struct dvb_frontend_info);
 		ctx->feinfo = kmalloc(len, GFP_KERNEL);
 		if (ctx->feinfo == NULL) {
@@ -253,7 +262,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		break;
 
 	case VTUNER_GET_MESSAGE:
-		dprintk(ctx, "msg VTUNER_GET_MESSAGE\n");
+		dprintk(ctx, "IOCTL VTUNER_GET_MESSAGE\n");
 		if (wait_event_interruptible(ctx->ctrldev_wait_request_wq, ctx->ctrldev_request.type != -1)) {
 			ret = -ERESTARTSYS;
 			break;
@@ -274,7 +283,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		break;
 
 	case VTUNER_SET_RESPONSE:
-		dprintk(ctx, "msg VTUNER_SET_RESPONSE\n");
+		dprintk(ctx, "IOCTL VTUNER_SET_RESPONSE\n");
 		if (copy_from_user(&ctx->ctrldev_response, (char *)arg, VTUNER_MSG_LEN)) {
 			ret = -EFAULT;
 		}
@@ -283,7 +292,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		break;
 
 	case VTUNER_SET_NUM_MODES:
-		dprintk(ctx, "msg VTUNER_SET_NUM_MODES (faked)\n");
+		dprintk(ctx, "IOCTL VTUNER_SET_NUM_MODES (faked)\n");
 		ctx->num_modes = (int) arg;
 		break;
 
