@@ -187,13 +187,62 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.body.fe_params.u.qpsk.fec_inner = c->fec_inner;
 
 		if (ctx->vtype == VT_S2 && c->delivery_system == SYS_DVBS2) {
+#if 0
 			/* DELIVERY SYSTEM: S2 delsys in use */
 			msg.body.fe_params.u.qpsk.fec_inner |= 32;
 
 			/* MODULATION */
 			if (c->modulation == PSK_8)
-			  /* signal PSK_8 modulation used */
-			  msg.body.fe_params.u.qpsk.fec_inner |= 64;
+				/* signal PSK_8 modulation used */
+				msg.body.fe_params.u.qpsk.fec_inner |= 64;
+#endif
+			/* DELIVERY SYSTEM: S2 delsys in use */
+			msg.body.fe_params.u.qpsk.fec_inner = 9;
+
+			/* MODULATION */
+			if (c->modulation == PSK_8)
+				/* signal PSK_8 modulation used */
+				msg.body.fe_params.u.qpsk.fec_inner += 9;
+
+			/* FEC */
+			switch (c->fec_inner) {
+			case FEC_1_2:
+				msg.body.fe_params.u.qpsk.fec_inner += 1;
+				break;
+			case FEC_2_3:
+				msg.body.fe_params.u.qpsk.fec_inner += 2;
+				break;
+			case FEC_3_4:
+				msg.body.fe_params.u.qpsk.fec_inner += 3;
+				break;
+			case FEC_4_5:
+				msg.body.fe_params.u.qpsk.fec_inner += 8;
+				break;
+			case FEC_5_6:
+				msg.body.fe_params.u.qpsk.fec_inner += 4;
+				break;
+			/*case FEC_6_7: // undefined
+				msg.body.fe_params.u.qpsk.fec_inner += 2;
+				break;*/
+			case FEC_7_8:
+				msg.body.fe_params.u.qpsk.fec_inner += 5;
+				break;
+			case FEC_8_9:
+				msg.body.fe_params.u.qpsk.fec_inner += 6;
+				break;
+			/*case FEC_AUTO: // undefined
+				msg.body.fe_params.u.qpsk.fec_inner += 2;
+				break;*/
+			case FEC_3_5:
+				msg.body.fe_params.u.qpsk.fec_inner += 7;
+				break;
+			case FEC_9_10:
+				msg.body.fe_params.u.qpsk.fec_inner += 9;
+				break;
+			default:
+				; /*FIXME: what now? */
+				break;
+			}
 
 			/* ROLLOFF */
 			switch (c->rolloff) {
