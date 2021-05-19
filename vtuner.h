@@ -83,6 +83,7 @@ struct vtuner_message {
 				} vsb;
 			} u;
 		} fe_params;
+		struct dvb_frontend_tune_settings tune_settings;
 		struct dtv_property prop;
 		u32 status;
 		u32 ber;
