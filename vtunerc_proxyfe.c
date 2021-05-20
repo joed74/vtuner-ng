@@ -477,15 +477,15 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 #endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-T",
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0)
+#ifdef HZ_FREQUENCIES
+		.frequency_min_hz	= 51 * Mhz,
+		.frequency_max_hz	= 863250 * Mhz,
+		.frequency_stepsize_hz	= 62500,
+#else
 		.type			= FE_OFDM,
 		.frequency_min		= 51000000,
 		.frequency_max		= 863250000,
 		.frequency_stepsize	= 62500,
-#else
-		.frequency_min_hz	= 51000000,
-		.frequency_max_hz	= 863250000,
-		.frequency_stepsize_hz	= 62500,
 #endif
 		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 | FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 |
 			FE_CAN_FEC_8_9 | FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_64 | FE_CAN_QAM_AUTO | FE_CAN_TRANSMISSION_MODE_AUTO |
@@ -515,15 +515,15 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
 #endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-C",
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0)
+#ifdef HZ_FREQUENCIES
+		.frequency_stepsize_hz	= 62500,
+		.frequency_min_hz	= 51 * Mhz,
+		.frequency_max_hz	= 858 * Mhz,
+#else
 		.type			= FE_QAM,
 		.frequency_stepsize	= 62500,
 		.frequency_min		= 51000000,
 		.frequency_max		= 858000000,
-#else
-		.frequency_stepsize_hz	= 62500,
-		.frequency_min_hz	= 51000000,
-		.frequency_max_hz	= 858000000,
 #endif
 		.symbol_rate_min	= (57840000/2)/64,     /* SACLK/64 == (XIN/2)/64 */
 		.symbol_rate_max	= (57840000/2)/4,      /* SACLK/4 */
@@ -551,17 +551,17 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 #endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-S",
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0)
+#ifdef HZ_FREQUENCIES
+		.frequency_min_hz	= 950 * Mhz,
+		.frequency_max_hz	= 2150 * Mhz,
+		.frequency_stepsize_hz	= 250 * Khz,           /* kHz for QPSK frontends */
+		.frequency_tolerance_hz	= 29500 * khz,
+#else
 		.type			= FE_QPSK,
 		.frequency_min		= 950000,
 		.frequency_max		= 2150000,
 		.frequency_stepsize	= 250,           /* kHz for QPSK frontends */
 		.frequency_tolerance	= 29500,
-#else
-		.frequency_min_hz	= 950000,
-		.frequency_max_hz	= 2150000,
-		.frequency_stepsize_hz	= 250,           /* kHz for QPSK frontends */
-		.frequency_tolerance_hz	= 29500,
 #endif
 		.symbol_rate_min	= 1000000,
 		.symbol_rate_max	= 45000000,

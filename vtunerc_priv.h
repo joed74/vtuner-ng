@@ -22,6 +22,8 @@
 #include <linux/cdev.h>
 #include <linux/version.h>
 
+#define HZ_FREQUENCIES
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0)
  #include "demux.h"
  #include "dmxdev.h"
