@@ -478,8 +478,8 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 	.info = {
 		.name			= "vTuner proxyFE DVB-T",
 #ifdef HZ_FREQUENCIES
-		.frequency_min_hz	= 51 * Mhz,
-		.frequency_max_hz	= 863250 * Mhz,
+		.frequency_min_hz	= 51 * MHz,
+		.frequency_max_hz	= 863250 * MHz,
 		.frequency_stepsize_hz	= 62500,
 #else
 		.type			= FE_OFDM,
@@ -517,8 +517,8 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
 		.name			= "vTuner proxyFE DVB-C",
 #ifdef HZ_FREQUENCIES
 		.frequency_stepsize_hz	= 62500,
-		.frequency_min_hz	= 51 * Mhz,
-		.frequency_max_hz	= 858 * Mhz,
+		.frequency_min_hz	= 51 * MHz,
+		.frequency_max_hz	= 858 * MHz,
 #else
 		.type			= FE_QAM,
 		.frequency_stepsize	= 62500,
@@ -552,9 +552,9 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 	.info = {
 		.name			= "vTuner proxyFE DVB-S",
 #ifdef HZ_FREQUENCIES
-		.frequency_min_hz	= 950 * Mhz,
-		.frequency_max_hz	= 2150 * Mhz,
-		.frequency_stepsize_hz	= 250 * Khz,           /* kHz for QPSK frontends */
+		.frequency_min_hz	= 950 * MHz,
+		.frequency_max_hz	= 2150 * MHz,
+		.frequency_stepsize_hz	= 250 * kHz,           /* kHz for QPSK frontends */
 		.frequency_tolerance_hz	= 29500 * khz,
 #else
 		.type			= FE_QPSK,
