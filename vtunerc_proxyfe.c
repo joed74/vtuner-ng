@@ -555,7 +555,7 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 		.frequency_min_hz	= 950 * MHz,
 		.frequency_max_hz	= 2150 * MHz,
 		.frequency_stepsize_hz	= 250 * kHz,           /* kHz for QPSK frontends */
-		.frequency_tolerance_hz	= 29500 * khz,
+		.frequency_tolerance_hz	= 29500 * kHz,
 #else
 		.type			= FE_QPSK,
 		.frequency_min		= 950000,
