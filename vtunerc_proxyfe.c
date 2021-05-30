@@ -191,7 +191,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.body.fe_params.u.qpsk.fec_inner = c->fec_inner;
 
 		if (ctx->vtype == VT_S2 && c->delivery_system == SYS_DVBS2) {
-#if 0
+#if 1
 			/* DELIVERY SYSTEM: S2 delsys in use */
 			msg.body.fe_params.u.qpsk.fec_inner |= 32;
 
