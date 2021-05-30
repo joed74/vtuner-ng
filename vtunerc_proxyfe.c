@@ -27,13 +27,10 @@
 #endif
 
 #if (DVB_API_VERSION << 8 | DVB_API_VERSION_MINOR) < 0x0505
-/*
- *workaround for some older platforms
- *#error ========================================================================
- *#error Version 5.5 or newer of DVB API is required (see at linux/dvb/version.h)
- *#error You can find it in kernel version >= 3.3.0
- *#error ========================================================================
-*/
+ #error ========================================================================
+ #error Version 5.5 or newer of DVB API is required (see at linux/dvb/version.h)
+ #error You can find it in kernel version >= 3.3.0
+ #error ========================================================================
 #else
  #define HAS_DELSYS
 #endif
@@ -56,8 +53,15 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *stat
 	msg.type = MSG_READ_STATUS;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
+#if 0
 	*status = msg.body.status;
-
+#else
+	*status = FE_HAS_SIGNAL
+		| FE_HAS_CARRIER
+		| FE_HAS_VITERBI
+		| FE_HAS_SYNC
+		| FE_HAS_LOCK;
+#endif
 	return 0;
 }
 
@@ -195,7 +199,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 			if (c->modulation == PSK_8)
 				/* signal PSK_8 modulation used */
 				msg.body.fe_params.u.qpsk.fec_inner |= 64;
-#endif
+#else
 			/* DELIVERY SYSTEM: S2 delsys in use */
 			msg.body.fe_params.u.qpsk.fec_inner = 9;
 
@@ -243,6 +247,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 				; /*FIXME: what now? */
 				break;
 			}
+#endif
 
 			/* ROLLOFF */
 			switch (c->rolloff) {
@@ -477,7 +482,7 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 #endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-T",
-#ifdef HZ_FREQUENCIES
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_min_hz	= 51 * MHz,
 		.frequency_max_hz	= 863250 * MHz,
 		.frequency_stepsize_hz	= 62500,
@@ -515,7 +520,7 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
 #endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-C",
-#ifdef HZ_FREQUENCIES
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_stepsize_hz	= 62500,
 		.frequency_min_hz	= 51 * MHz,
 		.frequency_max_hz	= 858 * MHz,
@@ -551,7 +556,7 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 #endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-S",
-#ifdef HZ_FREQUENCIES
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_min_hz	= 950 * MHz,
 		.frequency_max_hz	= 2150 * MHz,
 		.frequency_stepsize_hz	= 250 * kHz,           /* kHz for QPSK frontends */
