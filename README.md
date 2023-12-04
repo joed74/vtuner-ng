@@ -1,6 +1,5 @@
-Patched linux kernel driver for kernels 3.10 ... 5.6 is part of virtualized DVB
-adapter project named "vtuner" by Honza.
-You should download your kernel source and copy the missing headers to /usr/src/linux-headers-X.X.X-XX.
+Virtualized DVB driver for kernels 3.10 ... 6.x 
+From former project named "vtuner" by Honza Petrous.
 
 Driver is registering the following devices:
 
