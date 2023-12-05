@@ -33,3 +33,7 @@ clean:
 	rm -f *~
 	rm -f *.symvers
 	rm -f *.order
+	
+install:
+	cp vtunerc.ko /lib/modules/$(shell uname -r)/kernel/drivers/media/tuners
+	depmod -a

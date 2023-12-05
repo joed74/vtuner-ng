@@ -61,20 +61,15 @@ struct vtunerc_ctx {
 	struct dmx_frontend hw_frontend;
 	struct dmx_frontend mem_frontend;
 	struct dmxdev dmxdev;
-	struct dmxdev dmxdev1;
-	struct dmxdev dmxdev2;
 	struct dvb_adapter dvb_adapter;
 	struct dvb_demux demux;
 	struct dvb_frontend *fe;
-	struct dvb_net dvbnet;
-	struct dvb_device *ca;
 
 	/* internals */
 	int idx;
 	char *fe_name;
 	char *fe_type;
 	u8 vtype;
-	struct dvb_frontend_info *feinfo;
 	struct vtunerc_config *config;
 
 	unsigned short pidtab[MAX_PIDTAB_LEN];
@@ -91,11 +86,11 @@ struct vtunerc_ctx {
 	ssize_t kernel_buf_size;
 
 	/* ctrldev */
-	char trail[188];
-	unsigned int trailsize;
+	//char trail[188];
+	//unsigned int trailsize;
 	int noresponse;
-	int num_modes;
-	char *ctypes[MAX_NUM_VTUNER_MODES];
+	//int num_modes;
+	//char *ctypes[MAX_NUM_VTUNER_MODES];
 	struct vtuner_message ctrldev_request;
 	struct vtuner_message ctrldev_response;
 	wait_queue_head_t ctrldev_wait_request_wq;

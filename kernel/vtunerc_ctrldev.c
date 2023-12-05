@@ -21,6 +21,7 @@
 #include <linux/delay.h>
 #include <linux/time.h>
 #include <linux/poll.h>
+#include <linux/dvb/frontend.h>
 #include "vtunerc_priv.h"
 
 #define VTUNERC_CTRLDEV_MAJOR	266
@@ -163,7 +164,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct vtunerc_ctx *ctx = file->private_data;
-	int len, i, vtype, ret = 0;
+	int len, vtype, ret = 0;
 
 	if (ctx->closing)
 		return -EINTR;
@@ -173,7 +174,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 
 	switch (cmd) {
 	case VTUNER_SET_NAME:
-		dprintk(ctx, "IOCTL VTUNER_SET_NAME\n");
 		len = sizeof((char *)arg);
 		ctx->fe_name = kmalloc(len, GFP_KERNEL);
 		if (ctx->fe_name == NULL) {
@@ -186,25 +186,10 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 			ret = -EFAULT;
 			break;
 		}
+		dprintk(ctx, "ioctl VTUNER_SET_NAME %s\n", ctx->fe_name);
 		break;
 
-	case VTUNER_SET_MODES:
-		dprintk(ctx, "IOCTL VTUNER_SET_MODES\n");
-		for (i = 0; i < ctx->num_modes; i++)
-			ctx->ctypes[i] = &(((char *)(arg))[i*32]);
-		if (ctx->num_modes != 1) {
-			printk(KERN_ERR "vtunerc%d: currently supported only num_modes = 1!\n", ctx->idx);
-			ret = -EINVAL;
-			break;
-		}
-		/* follow into old code for compatibility */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0)
-#else
-	fallthrough;
-#endif
 	case VTUNER_SET_TYPE:
-		dprintk(ctx, "IOCTL VTUNER_SET_TYPE\n");
 		len = sizeof((char *)arg);
 		ctx->fe_type = kmalloc(len, GFP_KERNEL);
 		if (ctx->fe_type == NULL) {
@@ -244,25 +229,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 
 		break;
 
-
-	case VTUNER_SET_FE_INFO:
-		dprintk(ctx, "IOCTL VTUNER_SET_FE_INFO\n");
-		len = sizeof(struct dvb_frontend_info);
-		ctx->feinfo = kmalloc(len, GFP_KERNEL);
-		if (ctx->feinfo == NULL) {
-			printk(KERN_ERR "vtunerc%d: no mem\n", ctx->idx);
-			ret = -ENOMEM;
-			break;
-		}
-		if (copy_from_user(ctx->feinfo, (char *)arg, len)) {
-			kfree(ctx->feinfo);
-			ret = -EFAULT;
-			break;
-		}
-		break;
-
 	case VTUNER_GET_MESSAGE:
-		dprintk(ctx, "IOCTL VTUNER_GET_MESSAGE\n");
 		if (wait_event_interruptible(ctx->ctrldev_wait_request_wq, ctx->ctrldev_request.type != -1)) {
 			ret = -ERESTARTSYS;
 			break;
@@ -283,17 +250,11 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		break;
 
 	case VTUNER_SET_RESPONSE:
-		dprintk(ctx, "IOCTL VTUNER_SET_RESPONSE\n");
 		if (copy_from_user(&ctx->ctrldev_response, (char *)arg, VTUNER_MSG_LEN)) {
 			ret = -EFAULT;
 		}
 		wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
 
-		break;
-
-	case VTUNER_SET_NUM_MODES:
-		dprintk(ctx, "IOCTL VTUNER_SET_NUM_MODES (faked)\n");
-		ctx->num_modes = (int) arg;
 		break;
 
 	default:
@@ -395,7 +356,6 @@ void vtunerc_unregister_ctrldev(struct vtunerc_config *config)
 
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response)
 {
-	dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
 	if (down_interruptible(&ctx->xchange_sem))
 		return -ERESTARTSYS;
 
@@ -404,7 +364,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 		up(&ctx->xchange_sem);
 		return 0;
 	}
-	dprintk(ctx, "XCH_MSG: %d: continue\n", msg->type);
+	if (msg->type >= MSG_SET_FRONTEND) dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
 
 #if 0
 	BUG_ON(ctx->ctrldev_request.type != -1);
@@ -431,7 +391,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 
 	BUG_ON(ctx->ctrldev_response.type == -1);
 
-	dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
+	if (msg->type >= MSG_SET_FRONTEND) dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
 	memcpy(msg, &ctx->ctrldev_response, sizeof(struct vtuner_message));
 	ctx->ctrldev_response.type = -1;
 

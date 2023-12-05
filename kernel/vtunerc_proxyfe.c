@@ -53,15 +53,7 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *stat
 	msg.type = MSG_READ_STATUS;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
-#if 0
 	*status = msg.body.status;
-#else
-	*status = FE_HAS_SIGNAL
-		| FE_HAS_CARRIER
-		| FE_HAS_VITERBI
-		| FE_HAS_SYNC
-		| FE_HAS_LOCK;
-#endif
 	return 0;
 }
 
@@ -121,6 +113,7 @@ static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 	return 0;
 }
 
+/*
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
 static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe)
 {
@@ -139,10 +132,13 @@ static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe, struct dtv_frontend
 	switch (ctx->vtype) {
 	case VT_S:
 	case VT_S2:
-		/*FIXME*/
 		{
 			c->symbol_rate = msg.body.fe_params.u.qpsk.symbol_rate;
 			c->fec_inner = msg.body.fe_params.u.qpsk.fec_inner;
+			c->modulation = msg.body.fe_params.u.qpsk.modulation;
+			c->pilot = msg.body.fe_params.u.qpsk.pilot;
+			c->rolloff = msg.body.fe_params.u.qpsk.rolloff;
+			c->delivery_system = msg.body.fe_params.u.qpsk.delivery_system;
 		}
 		break;
 	case VT_T:
@@ -157,7 +153,6 @@ static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe, struct dtv_frontend
 		}
 		break;
 	case VT_C:
-		/* FIXME: untested */
 		{
 			c->symbol_rate = msg.body.fe_params.u.qam.symbol_rate;
 			c->fec_inner = msg.body.fe_params.u.qam.fec_inner;
@@ -172,6 +167,7 @@ static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe, struct dtv_frontend
 	c->inversion = msg.body.fe_params.inversion;
 	return 0;
 }
+*/
 
 static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 {
@@ -189,92 +185,10 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	case VT_S2:
 		msg.body.fe_params.u.qpsk.symbol_rate = c->symbol_rate;
 		msg.body.fe_params.u.qpsk.fec_inner = c->fec_inner;
-
-		if (ctx->vtype == VT_S2 && c->delivery_system == SYS_DVBS2) {
-#if 0
-			/* DELIVERY SYSTEM: S2 delsys in use */
-			msg.body.fe_params.u.qpsk.fec_inner |= 32;
-
-			/* MODULATION */
-			if (c->modulation == PSK_8)
-				/* signal PSK_8 modulation used */
-				msg.body.fe_params.u.qpsk.fec_inner |= 64;
-#else
-			/* DELIVERY SYSTEM: S2 delsys in use */
-			msg.body.fe_params.u.qpsk.fec_inner = 9;
-
-			/* MODULATION */
-			if (c->modulation == PSK_8)
-				/* signal PSK_8 modulation used */
-				msg.body.fe_params.u.qpsk.fec_inner += 9;
-
-			/* FEC */
-			switch (c->fec_inner) {
-			case FEC_1_2:
-				msg.body.fe_params.u.qpsk.fec_inner += 1;
-				break;
-			case FEC_2_3:
-				msg.body.fe_params.u.qpsk.fec_inner += 2;
-				break;
-			case FEC_3_4:
-				msg.body.fe_params.u.qpsk.fec_inner += 3;
-				break;
-			case FEC_4_5:
-				msg.body.fe_params.u.qpsk.fec_inner += 8;
-				break;
-			case FEC_5_6:
-				msg.body.fe_params.u.qpsk.fec_inner += 4;
-				break;
-			/*case FEC_6_7: // undefined
-				msg.body.fe_params.u.qpsk.fec_inner += 2;
-				break;*/
-			case FEC_7_8:
-				msg.body.fe_params.u.qpsk.fec_inner += 5;
-				break;
-			case FEC_8_9:
-				msg.body.fe_params.u.qpsk.fec_inner += 6;
-				break;
-			/*case FEC_AUTO: // undefined
-				msg.body.fe_params.u.qpsk.fec_inner += 2;
-				break;*/
-			case FEC_3_5:
-				msg.body.fe_params.u.qpsk.fec_inner += 7;
-				break;
-			case FEC_9_10:
-				msg.body.fe_params.u.qpsk.fec_inner += 9;
-				break;
-			default:
-				; /*FIXME: what now? */
-				break;
-			}
-#endif
-
-			/* ROLLOFF */
-			switch (c->rolloff) {
-			case ROLLOFF_20:
-				msg.body.fe_params.inversion |= 0x08;
-				break;
-			case ROLLOFF_25:
-				msg.body.fe_params.inversion |= 0x04;
-				break;
-			case ROLLOFF_35:
-			default:
-				break;
-			}
-
-			/* PILOT */
-			switch (c->pilot) {
-			case PILOT_ON:
-				msg.body.fe_params.inversion |= 0x10;
-				break;
-			case PILOT_AUTO:
-				msg.body.fe_params.inversion |= 0x20;
-				break;
-			case PILOT_OFF:
-			default:
-				break;
-			}
-		}
+		msg.body.fe_params.u.qpsk.modulation = c->modulation;
+		msg.body.fe_params.u.qpsk.pilot = c->pilot;
+		msg.body.fe_params.u.qpsk.rolloff = c->rolloff;
+		msg.body.fe_params.u.qpsk.delivery_system = ctx->vtype;
 		break;
 	case VT_T:
 		msg.body.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
@@ -484,7 +398,7 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 		.name			= "vTuner proxyFE DVB-T",
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_min_hz	= 51 * MHz,
-		.frequency_max_hz	= 863250 * MHz,
+		.frequency_max_hz	= 863250 * kHz,
 		.frequency_stepsize_hz	= 62500,
 #else
 		.type			= FE_OFDM,
@@ -503,7 +417,6 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 	.sleep = dvb_proxyfe_sleep,
 
 	.set_frontend = dvb_proxyfe_set_frontend,
-	.get_frontend = dvb_proxyfe_get_frontend,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
 	.get_property = dvb_proxyfe_get_property,
 #endif
@@ -541,7 +454,6 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
 	.sleep = dvb_proxyfe_sleep,
 
 	.set_frontend = dvb_proxyfe_set_frontend,
-	.get_frontend = dvb_proxyfe_get_frontend,
 
 	.read_status = dvb_proxyfe_read_status,
 	.read_ber = dvb_proxyfe_read_ber,
@@ -579,7 +491,6 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 	.init = dvb_proxyfe_init,
 	.sleep = dvb_proxyfe_sleep,
 
-	.get_frontend = dvb_proxyfe_get_frontend,
 	.get_frontend_algo = dvb_proxyfe_get_frontend_algo,
 	.set_frontend = dvb_proxyfe_set_frontend,
 
@@ -624,6 +535,8 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype)
 		return -EINVAL;
 	}
 
+	ctx->fe->id = ctx->idx;
+
 	if(ctx->vtype == VT_NULL) // means: was frontend not registered yet?
 		ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
 
@@ -634,5 +547,10 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype)
 
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx)
 {
-	return ctx->fe ? dvb_unregister_frontend(ctx->fe) : 0;
+	if (ctx->fe) {
+		dvb_unregister_frontend(ctx->fe);
+		kfree(ctx->fe->demodulator_priv);
+		ctx->fe = NULL;
+	}
+	return 0;
 }

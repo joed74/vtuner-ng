@@ -41,7 +41,7 @@
  #include <media/dvbdev.h>
 #endif
 
-#define VTUNERC_MODULE_VERSION "1.5"
+#define VTUNERC_MODULE_VERSION "2.0"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
@@ -178,11 +178,6 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 #ifdef CONFIG_PROC_FS
 
-static char *get_fe_name(struct dvb_frontend_info *feinfo)
-{
-	return (feinfo && feinfo->name) ? feinfo->name : "(not set)";
-}
-
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
 	int i, pcnt = 0;
@@ -199,7 +194,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 		}
 
 	seq_printf(seq, " (len=%d)\n", pcnt);
-	seq_printf(seq, "  FE type : %s\n", get_fe_name(ctx->feinfo));
+	seq_printf(seq, "  FE type : %i\n", ctx->vtype);
 	seq_printf(seq, "  msg xchg: %d/%d\n", ctx->ctrldev_request.type, ctx->ctrldev_response.type);
 
 	return 0;
@@ -208,7 +203,11 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 static int vtunerc_proc_open(struct inode *inode, struct file *file)
 {
 	int ret;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,17,0) 
 	struct vtunerc_ctx *ctx = PDE_DATA(inode);
+#else
+	struct vtunerc_ctx *ctx = pde_data(inode);
+#endif
 
 	if (!try_module_get(THIS_MODULE))
 		return -ENODEV;
@@ -442,4 +441,4 @@ module_param_named(tscheck, config.tscheck, int, S_IRUSR | S_IWUSR | S_IRGRP | S
 MODULE_PARM_DESC(tscheck, "Check TS packet validity (default is 0)");
 
 module_param_named(debug, config.debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(debug, "Enable debug messages (default is 0)");
+MODULE_PARM_DESC(debug, "Enable debug messages (default is 1)");
