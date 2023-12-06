@@ -539,7 +539,7 @@ static void send_request(t_satip_rtsp* rtsp,
   if ( (*sendfunc)(rtsp) == SATIP_RTSP_OK )
     rtsp->timer = polltimer_start( rtsp->timer_queue,
 				   timeout_reconnect,
-				   2000,(void*)rtsp);
+				   5000,(void*)rtsp);
   else
     restart_connection(rtsp,0);
 }
@@ -590,8 +590,8 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 	  
 	  if ( ret==SATIP_RTSP_ERROR )
 	    {
-	      DEBUG(MSG_NET,"peer closed\n");
-
+	      DEBUG(MSG_NET,"peer closed, waiting for timeout...\n");
+              sleep(65);
 	      restart_connection(rtsp,0);
 	    }
 	  else if ( ret==SATIP_RTSP_COMPLETE )
@@ -710,8 +710,8 @@ void  satip_rtsp_check_update(struct satip_rtsp*  rtsp)
 	       satip_pid_update_required(rtsp->satip_config)) 
 	    send_request(rtsp, RTSP_READY, RTSP_REQ_PLAY, send_play);
 
-	  else if ( !satip_valid_config(rtsp->satip_config) )
-	    send_request(rtsp, RTSP_READY, RTSP_REQ_TEARDOWN, send_teardown);
+//	  else if ( !satip_valid_config(rtsp->satip_config) )
+//	    send_request(rtsp, RTSP_READY, RTSP_REQ_TEARDOWN, send_teardown);
 	}
       break;
 

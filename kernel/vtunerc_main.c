@@ -59,7 +59,7 @@ static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 static struct vtunerc_config config = {
 	.devices = 1,
 	.tscheck = 0,
-	.debug = 1
+	.debug = 0
 };
 
 static int pidtab_find_index(unsigned short *pidtab, int pid)
@@ -441,4 +441,4 @@ module_param_named(tscheck, config.tscheck, int, S_IRUSR | S_IWUSR | S_IRGRP | S
 MODULE_PARM_DESC(tscheck, "Check TS packet validity (default is 0)");
 
 module_param_named(debug, config.debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(debug, "Enable debug messages (default is 1)");
+MODULE_PARM_DESC(debug, "Enable debug messages (default is 0)");

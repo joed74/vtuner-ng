@@ -29,6 +29,9 @@
 #include <poll.h>
 #include <sched.h>
 
+#include <sys/types.h>
+#include <fcntl.h>
+
 #include "satip_rtp.h"
 #include "log.h"
 
@@ -54,7 +57,7 @@ static void rtp_data(unsigned char* buffer,int rx)
   int done=0;
   uint32_t* buf=(uint32_t*) buffer;
   uint32_t val;
-  int plen; 
+  int plen;
   int pt;
   char infobuf[200];
 
@@ -64,7 +67,7 @@ static void rtp_data(unsigned char* buffer,int rx)
       pt= ( val  & 0x00ff0000 ) >>16 ;
       plen= val & 0x0000ffff;
 
-      switch(pt) 
+      switch(pt)
 	{
 	case 204:
 	  if (plen>1)
@@ -75,7 +78,7 @@ static void rtp_data(unsigned char* buffer,int rx)
 		    val>>8 & 0x000000ff,
 		    val>>16 & 0x000000ff,
 		    val>>24 & 0x000000ff);
-	      
+
 	      val=htonl(buf[3]);
 	      if ( val <200 )
 		{
@@ -86,11 +89,11 @@ static void rtp_data(unsigned char* buffer,int rx)
 	    }
 
 	  break;
-	
+
 	default:
 	  DEBUG(MSG_MAIN,"RTCP: packet type %d len %d\n",pt,plen);
 	}
-     
+
       buf+=plen+1;
       done+=(plen+1)*4;
     }
@@ -98,14 +101,15 @@ static void rtp_data(unsigned char* buffer,int rx)
 
 
 static void* rtp_receiver(void* param)
-{    
+{
   unsigned char rxbuf[32768];
   struct pollfd pollfds[2];
   struct sched_param schedp;
+  char filler[188];
   t_satip_rtp* srtp=(t_satip_rtp*)param;
-  
+
   schedp.sched_priority = sched_get_priority_min(SCHED_FIFO)+1;
-  
+
   if ( sched_setscheduler(0, SCHED_FIFO, &schedp) )
     DEBUG(MSG_MAIN,"RTP: No realtime scheduling\n");
   else
@@ -120,22 +124,58 @@ static void* rtp_receiver(void* param)
   pollfds[1].events = POLLIN;
   pollfds[1].revents = 0;
 
-  
+  memset(&filler,0xff,sizeof(filler));
+  filler[0]=0x47;
+  filler[1]=0x1F;
+  filler[2]=0xFF;
+  filler[3]=0x20; // only adaption, no payload
+  filler[4]=0xB7; // adaption field length
+  filler[5]=0x00; // adaption fields (none)
+
+#ifdef DEBUG_STREAM
+  int fd=open("/tmp/stream.ts", O_CREAT | O_TRUNC | O_RDWR, 0644);
+#endif
+
+  int pusi=0;
+
   while(1)
     {
       poll(pollfds,2,-1);
-      
+
       if ( pollfds[0].revents & POLLIN )
 	{
 	  int rx,wr;
 	  pollfds[0].revents = 0;
-	  
-	  rx = recv(pollfds[0].fd, rxbuf, 32768,0);	  
-	  
+
+	  rx = recv(pollfds[0].fd, rxbuf, 32768,0);
+	  DEBUG(MSG_DATA,"RTP: rd %d   wr %d\n",rx,wr);
 	  if ( rx>12 && rxbuf[12] == 0x47 )
 	    {
-	      wr= write(srtp->fd,&rxbuf[12],rx-12);
-	      DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
+		if (rxbuf[13] & 0x40) pusi=1;
+		if (pusi) {
+		  wr = write(srtp->fd,&rxbuf[12],rx-12);
+#ifdef DEBUG_STREAM
+		  write(fd,&rxbuf[12],rx-12);
+#endif
+		  DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
+		} else {
+	          wr = write(srtp->fd,&filler,sizeof(filler));
+#ifdef DEBUG_STREAM
+		  write(fd,&filler,sizeof(filler));
+#endif
+                  pusi=0;
+		  DEBUG(MSG_DATA,"RTP: wait for PUSI\n");
+		}
+	    }
+	    else
+	    {
+	      // send filler packet
+	      wr = write(srtp->fd,&filler,sizeof(filler));
+#ifdef DEBUG_STREAM
+	      write(fd,&filler,sizeof(filler));
+#endif
+              pusi=0;
+	      DEBUG(MSG_DATA,"RTP: send filler %d\n",rx);
 	    }
 	}
 
@@ -143,13 +183,16 @@ static void* rtp_receiver(void* param)
 	{
 	  int rx;
 	  pollfds[1].revents = 0;
-	  
+
 	  rx=recv(pollfds[1].fd, rxbuf, 32768,0);
 	  rtp_data(rxbuf,rx);
 	  DEBUG(MSG_DATA,"RTCP: rd %d\n",rx);
 	}
 
     }
+#ifdef DEBUG_STREAM
+  close(fd);
+#endif
   return NULL;
 }
 
@@ -210,7 +253,7 @@ t_satip_rtp*  satip_rtp_new(int fd)
       inaddr.sin_family = AF_INET;
       inaddr.sin_addr.s_addr = htonl(INADDR_ANY);
       inaddr.sin_port = htons(rtcp_port);
-      
+
       if (bind(rtcp_sock, (struct sockaddr *) &inaddr, sizeof(inaddr)) < 0) 
 	{
 	  close(rtp_sock);
@@ -219,12 +262,12 @@ t_satip_rtp*  satip_rtp_new(int fd)
 	}
 
       INFO(MSG_NET,"rtp/rtcp port %d/%d\n",rtp_port,rtcp_port);
-      break;      
+      break;
     }
 
   if (attempts <= 0)
     return NULL;
-  
+
   srtp=(t_satip_rtp*)malloc(sizeof(t_satip_rtp));
 
   srtp->fd = fd;
@@ -232,7 +275,7 @@ t_satip_rtp*  satip_rtp_new(int fd)
   srtp->rtp_socket  = rtp_sock;
   srtp->rtcp_port   = rtcp_port;
   srtp->rtcp_socket = rtcp_sock;
-  
+
   pthread_create( &srtp->thread, NULL, rtp_receiver, srtp);
 
   return srtp;

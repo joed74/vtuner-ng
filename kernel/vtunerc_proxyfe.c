@@ -535,7 +535,7 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype)
 		return -EINVAL;
 	}
 
-	ctx->fe->id = ctx->idx;
+	ctx->fe->id = 0;
 
 	if(ctx->vtype == VT_NULL) // means: was frontend not registered yet?
 		ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
