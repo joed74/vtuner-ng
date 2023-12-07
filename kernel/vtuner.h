@@ -27,18 +27,14 @@
 #define VT_C	19
 #define VT_T	16
 
-#define MSG_READ_STATUS			1
-#define MSG_READ_BER			2
-#define MSG_READ_SIGNAL_STRENGTH	3
-#define MSG_READ_SNR			4
-#define MSG_READ_UCBLOCKS		5
-
 #define MSG_SET_FRONTEND		10
 #define MSG_SET_TONE			12
 #define MSG_SET_VOLTAGE			13
 #define MSG_SEND_DISEQC_MSG		14
 #define MSG_SEND_DISEQC_BURST		15
 #define MSG_PIDLIST			16
+
+#define MAX_PIDTAB_LEN			30
 
 #ifndef u32
 typedef unsigned int u32;
@@ -95,24 +91,27 @@ struct vtuner_message {
 				} ofdm;
 			} u;
 		} fe_params;
-		u32 status;
-		u32 ber;
-		u16 ss;
-		u16 snr;
-		u32 ucb;
 		u8 tone;
 		u8 voltage;
 		struct diseqc_master_cmd diseqc_master_cmd;
 		u8 burst;
-		u16 pidlist[30];
+		u16 pidlist[MAX_PIDTAB_LEN];
 	} body;
+};
+
+struct vtuner_signal
+{
+	u32 ber;
+	u16 ss;
+	u16 snr;
+	u32 ucb;
 };
 
 #define VTUNER_MAJOR		226
 
 #define VTUNER_GET_MESSAGE	_IOR(VTUNER_MAJOR, 1, struct vtuner_message *)
 #define VTUNER_SET_RESPONSE 	_IOW(VTUNER_MAJOR, 2, struct vtuner_message *)
-#define VTUNER_SET_NAME		_IOW(VTUNER_MAJOR, 3, char *)
+#define VTUNER_SET_SIGNAL	_IOW(VTUNER_MAJOR, 3, struct vtuner_signal *)
 #define VTUNER_SET_TYPE		_IOW(VTUNER_MAJOR, 4, char *)
 
 #endif

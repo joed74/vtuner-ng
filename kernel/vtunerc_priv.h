@@ -42,11 +42,7 @@
 
 #include "vtuner.h"
 
-#define MAX_PIDTAB_LEN 30
-
 #define PID_UNKNOWN 0x0FFFF
-
-#define MAX_NUM_VTUNER_MODES 3
 
 struct vtunerc_config {
 
@@ -67,10 +63,11 @@ struct vtunerc_ctx {
 
 	/* internals */
 	int idx;
-	char *fe_name;
 	char *fe_type;
 	u8 vtype;
+	u8 fe_status;
 	struct vtunerc_config *config;
+	struct vtuner_signal signal;
 
 	unsigned short pidtab[MAX_PIDTAB_LEN];
 
@@ -86,11 +83,7 @@ struct vtunerc_ctx {
 	ssize_t kernel_buf_size;
 
 	/* ctrldev */
-	//char trail[188];
-	//unsigned int trailsize;
 	int noresponse;
-	//int num_modes;
-	//char *ctypes[MAX_NUM_VTUNER_MODES];
 	struct vtuner_message ctrldev_request;
 	struct vtuner_message ctrldev_response;
 	wait_queue_head_t ctrldev_wait_request_wq;
@@ -98,9 +91,6 @@ struct vtunerc_ctx {
 
 	/* proc statistics */
 	unsigned int stat_wr_data;
-	unsigned int stat_rd_data;
-	unsigned int stat_ctrl_sess;
-	unsigned short pidstat[MAX_PIDTAB_LEN];
 };
 
 int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx);

@@ -118,6 +118,8 @@ int main(int argc, char** argv)
 
   int opt;
 
+  //fprintf(stderr, "msg size=%lu\n", sizeof(struct vtuner_message));
+
   while((opt = getopt(argc, argv, "h:p:d:f:m:l:")) != -1 ) {
     switch(opt) 
       {

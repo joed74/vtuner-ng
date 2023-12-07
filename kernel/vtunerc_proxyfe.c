@@ -48,12 +48,8 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *stat
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.type = MSG_READ_STATUS;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
-	*status = msg.body.status;
+	*status = ctx->fe_status;
 	return 0;
 }
 
@@ -61,13 +57,8 @@ static int dvb_proxyfe_read_ber(struct dvb_frontend *fe, u32 *ber)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.type = MSG_READ_BER;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
-	*ber = msg.body.ber;
-
+	*ber = ctx->signal.ber;
 	return 0;
 }
 
@@ -75,13 +66,8 @@ static int dvb_proxyfe_read_signal_strength(struct dvb_frontend *fe, u16 *streng
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.type = MSG_READ_SIGNAL_STRENGTH;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
-	*strength = msg.body.ss;
-
+	*strength = ctx->signal.ss;
 	return 0;
 }
 
@@ -89,13 +75,8 @@ static int dvb_proxyfe_read_snr(struct dvb_frontend *fe, u16 *snr)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.type = MSG_READ_SNR;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
-	*snr = msg.body.snr;
-
+	*snr = ctx->signal.snr;
 	return 0;
 }
 
@@ -103,13 +84,8 @@ static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.type = MSG_READ_UCBLOCKS;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
-	*ucblocks = msg.body.ucb;
-
+	*ucblocks = ctx->signal.ucb;
 	return 0;
 }
 
@@ -175,6 +151,8 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
+
+	ctx->fe_status = FE_HAS_CARRIER;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.body.fe_params.frequency = c->frequency;

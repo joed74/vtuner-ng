@@ -7,5 +7,8 @@ BIN = satip
 $(BIN):  $(OBJ)
 	$(CC) -o $(BIN) $(OBJ) -lrt -lpthread 
 
+install:
+	cp $(BIN) /usr/local/bin
+
 clean:
 	rm -f $(BIN) *.o *~

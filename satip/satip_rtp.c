@@ -24,17 +24,16 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <poll.h>
 #include <sched.h>
 
-#include <sys/types.h>
-#include <fcntl.h>
-
 #include "satip_rtp.h"
 #include "log.h"
 
+#include "vtuner.h"
 
 #define PORT_BASE 45000
 #define PORT_RANGE 2000
@@ -99,6 +98,15 @@ static void rtp_data(unsigned char* buffer,int rx)
     }
 }
 
+static void set_status(int fd, unsigned short ss, unsigned int ber, unsigned short snr, unsigned int ucb)
+{
+	struct vtuner_signal sig;
+	sig.ss = ss;
+	sig.ber = ber;
+	sig.snr = snr;
+	sig.ucb = ucb;
+	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
+}
 
 static void* rtp_receiver(void* param)
 {
@@ -132,12 +140,6 @@ static void* rtp_receiver(void* param)
   filler[4]=0xB7; // adaption field length
   filler[5]=0x00; // adaption fields (none)
 
-#ifdef DEBUG_STREAM
-  int fd=open("/tmp/stream.ts", O_CREAT | O_TRUNC | O_RDWR, 0644);
-#endif
-
-  int pusi=0;
-
   while(1)
     {
       poll(pollfds,2,-1);
@@ -151,31 +153,14 @@ static void* rtp_receiver(void* param)
 	  DEBUG(MSG_DATA,"RTP: rd %d   wr %d\n",rx,wr);
 	  if ( rx>12 && rxbuf[12] == 0x47 )
 	    {
-		if (rxbuf[13] & 0x40) pusi=1;
-		if (pusi) {
-		  wr = write(srtp->fd,&rxbuf[12],rx-12);
-#ifdef DEBUG_STREAM
-		  write(fd,&rxbuf[12],rx-12);
-#endif
-		  DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
-		} else {
-	          wr = write(srtp->fd,&filler,sizeof(filler));
-#ifdef DEBUG_STREAM
-		  write(fd,&filler,sizeof(filler));
-#endif
-                  pusi=0;
-		  DEBUG(MSG_DATA,"RTP: wait for PUSI\n");
-		}
+      		wr = write(srtp->fd,&rxbuf[12],rx-12);
+		DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
 	    }
 	    else
 	    {
-	      // send filler packet
-	      wr = write(srtp->fd,&filler,sizeof(filler));
-#ifdef DEBUG_STREAM
-	      write(fd,&filler,sizeof(filler));
-#endif
-              pusi=0;
-	      DEBUG(MSG_DATA,"RTP: send filler %d\n",rx);
+	        // send filler packet
+                wr = write(srtp->fd,&filler,sizeof(filler));
+	        DEBUG(MSG_DATA,"RTP: send filler %d\n",rx);
 	    }
 	}
 
@@ -190,9 +175,6 @@ static void* rtp_receiver(void* param)
 	}
 
     }
-#ifdef DEBUG_STREAM
-  close(fd);
-#endif
   return NULL;
 }
 
@@ -205,7 +187,7 @@ t_satip_rtp*  satip_rtp_new(int fd)
   int rtp_port, rtcp_port;
   struct timespec ts;
   int attempts=PORT_RANGE/2;
-  
+
 
   clock_gettime(CLOCK_REALTIME,&ts);
 

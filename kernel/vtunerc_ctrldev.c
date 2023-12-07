@@ -28,6 +28,7 @@
 #define VTUNERC_CTRLDEV_NAME	"vtunerc"
 
 #define VTUNER_MSG_LEN (sizeof(struct vtuner_message))
+#define VTUNER_SIG_LEN (sizeof(struct vtuner_signal))
 
 static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
@@ -88,6 +89,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 	}
 
+	ctx->fe_status = FE_HAS_LOCK;
 	ctx->stat_wr_data += len;
 	dvb_dmx_swfilter_packets(demux, ctx->kernel_buf, len / 188);
 
@@ -102,12 +104,23 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 
 static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buff, size_t len, loff_t *off)
 {
+/*
 	struct vtunerc_ctx *ctx = filp->private_data;
 
-	ctx->stat_rd_data += len;
+	if (ctx->closing)
+		return -EINTR;
 
-	/* read op is not using in current vtuner protocol */
-	return 0 ;
+	if (!ctx->kernel_buf)
+		return -EINVAL;
+
+	if (len > ctx->kernel_buf_size) len = ctx->kernel_buf_size;
+
+	if (copy_to_user(buff, ctx->kernel_buf, len))
+		return -EINVAL;
+
+	return len;
+*/
+	return -EINVAL;
 }
 
 static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
@@ -119,8 +132,6 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 	ctx = filp->private_data = vtunerc_get_ctx(minor);
 	if (ctx == NULL)
 		return -ENOMEM;
-
-	ctx->stat_ctrl_sess++;
 
 	/*FIXME: clear pidtab */
 
@@ -173,22 +184,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		return -ERESTARTSYS;
 
 	switch (cmd) {
-	case VTUNER_SET_NAME:
-		len = sizeof((char *)arg);
-		ctx->fe_name = kmalloc(len, GFP_KERNEL);
-		if (ctx->fe_name == NULL) {
-			printk(KERN_ERR "vtunerc%d: no memory\n", ctx->idx);
-			ret = -ENOMEM;
-			break;
-		}
-		if (copy_from_user(ctx->fe_name, (char *)arg, len)) {
-			kfree(ctx->fe_name);
-			ret = -EFAULT;
-			break;
-		}
-		dprintk(ctx, "ioctl VTUNER_SET_NAME %s\n", ctx->fe_name);
-		break;
-
 	case VTUNER_SET_TYPE:
 		len = sizeof((char *)arg);
 		ctx->fe_type = kmalloc(len, GFP_KERNEL);
@@ -226,7 +221,13 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 			ret = -ENODEV;
 			break;
 		}
+		break;
 
+	case VTUNER_SET_SIGNAL:
+		printk(KERN_INFO "vtunerc%d: set signal\n", ctx->idx);
+		if (copy_from_user(&ctx->signal, (char *)arg, VTUNER_SIG_LEN)) {
+			ret = -EFAULT;
+		}
 		break;
 
 	case VTUNER_GET_MESSAGE:
@@ -246,7 +247,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 
 		if (ctx->noresponse)
 			up(&ctx->xchange_sem);
-
 		break;
 
 	case VTUNER_SET_RESPONSE:
@@ -254,13 +254,11 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 			ret = -EFAULT;
 		}
 		wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
-
 		break;
 
 	default:
 		printk(KERN_ERR "vtunerc%d: unknown IOCTL 0x%x\n", ctx->idx, cmd);
 		ret = -ENOTTY; /* Linus: the only correct one return value for unsupported ioctl */
-
 		break;
 	}
 	up(&ctx->ioctl_sem);

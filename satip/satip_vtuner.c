@@ -71,9 +71,7 @@ t_satip_vtuner* satip_vtuner_new(char* devname,t_satip_config* satip_cfg)
       return NULL;
     }
   
-  if ( ioctl(fd, VTUNER_SET_NAME, "vTuner")      ||
-       ioctl(fd, VTUNER_SET_TYPE, "DVB-S2"))
-    return NULL;
+  if (ioctl(fd, VTUNER_SET_TYPE, "DVB-S2")) return NULL;
   
   vt=(t_satip_vtuner*)malloc(sizeof(t_satip_vtuner));
   
@@ -206,8 +204,6 @@ static void diseqc_msg(struct satip_vtuner* vt, struct vtuner_message* msg)
   DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_MSG:  %s\n",dbg);
 }      
 
-
-
 static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
   int i;
@@ -227,10 +223,6 @@ static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
 	DEBUG(MSG_MAIN,"%d\n",pidlist[i]);
       }
 }
-
-
-
-
 
 void satip_vtuner_event(struct satip_vtuner* vt)
 {
@@ -258,31 +250,6 @@ void satip_vtuner_event(struct satip_vtuner* vt)
       return;
       break;
       
-    case MSG_READ_STATUS:  
-      msg.body.status =    // tuning ok!
-	// FE_HAS_SIGNAL     |
-	// FE_HAS_CARRIER    |
-	// FE_HAS_VITERBI    |
-	// FE_HAS_SYNC       |
-	FE_HAS_LOCK;
-      break;
-
-    case MSG_READ_BER:
-      msg.body.ber = 0;
-      break;
-
-    case MSG_READ_SIGNAL_STRENGTH:
-      msg.body.ss = 50;
-      break;
-      
-    case MSG_READ_SNR:
-      msg.body.snr = 900; /* ?*/
-      break;
-    
-    case MSG_READ_UCBLOCKS:
-      msg.body.ucb = 0;
-      break;
-
     case MSG_SEND_DISEQC_BURST:
       DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_BURST\n");
       if ( msg.body.burst == SEC_MINI_A )

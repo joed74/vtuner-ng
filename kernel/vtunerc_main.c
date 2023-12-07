@@ -178,25 +178,57 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 #ifdef CONFIG_PROC_FS
 
+static void status2str(struct seq_file *seq, u8 status)
+{
+	seq_puts(seq, "  Status    : ");
+	switch (status) {
+		case FE_HAS_SIGNAL:
+		  seq_puts(seq, "FE_HAS_SIGNAL");
+		  break;
+		case FE_HAS_CARRIER:
+		  seq_puts(seq, "FE_HAS_CARRIER");
+		  break;
+		case FE_HAS_VITERBI:
+		  seq_puts(seq, "FE_HAS_VITERBI");
+		  break;
+		case FE_HAS_SYNC:
+		  seq_puts(seq, "FE_HAS_SYNC");
+		  break;
+		case FE_HAS_LOCK:
+		  seq_puts(seq, "FE_HAS_LOCK");
+		  break;
+		case FE_TIMEDOUT:
+		  seq_puts(seq, "FE_TIMEDOUT");
+		  break;
+		case FE_REINIT:
+		  seq_puts(seq, "FE_REINIT");
+		  break;
+		default:
+		  seq_puts(seq, "FE_NONE");
+	}
+	seq_puts(seq, "\n");
+}
+
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
 	int i, pcnt = 0;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
 
 	seq_printf(seq, "[ vtunerc driver, version " VTUNERC_MODULE_VERSION " ]\n");
-	seq_printf(seq, "  sessions: %u\n", ctx->stat_ctrl_sess);
-	seq_printf(seq, "  TS data : %u\n", ctx->stat_wr_data);
-	seq_printf(seq, "  PID tab :");
+	seq_printf(seq, "  FE type   : %i\n", ctx->vtype);
+	seq_printf(seq, "  Used by   : %u\n", ctx->fd_opened);
+	status2str(seq, ctx->fe_status);
+	seq_printf(seq, "  Frequency : %i\n", ctx->fe ? ctx->fe->dtv_property_cache.frequency : 0);
+	seq_printf(seq, "  Inversion : %i\n", ctx->fe ? ctx->fe->dtv_property_cache.inversion : 0);
+	seq_printf(seq, "  TS data   : %u\n", ctx->stat_wr_data);
+	seq_printf(seq, "  PID tab   :");
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (ctx->pidtab[i] != PID_UNKNOWN) {
-			seq_printf(seq, " %x", ctx->pidtab[i]);
+			seq_printf(seq, " %i", ctx->pidtab[i]);
 			pcnt++;
 		}
 
 	seq_printf(seq, " (len=%d)\n", pcnt);
-	seq_printf(seq, "  FE type : %i\n", ctx->vtype);
-	seq_printf(seq, "  msg xchg: %d/%d\n", ctx->ctrldev_request.type, ctx->ctrldev_response.type);
-
 	return 0;
 }
 
