@@ -23,23 +23,18 @@
 #include <linux/cdev.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0)
+ #error linux kernel version 4.16 or newer required
+#endif
+
 #define HZ_FREQUENCIES
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0)
- #include "demux.h"
- #include "dmxdev.h"
- #include "dvb_demux.h"
- #include "dvb_frontend.h"
- #include "dvb_net.h"
- #include "dvbdev.h"
-#else
- #include <media/demux.h>
- #include <media/dmxdev.h>
- #include <media/dvb_demux.h>
- #include <media/dvb_frontend.h>
- #include <media/dvb_net.h>
- #include <media/dvbdev.h>
-#endif
+#include <media/demux.h>
+#include <media/dmxdev.h>
+#include <media/dvb_demux.h>
+#include <media/dvb_frontend.h>
+#include <media/dvb_net.h>
+#include <media/dvbdev.h>
 
 #include "vtuner.h"
 

@@ -18,13 +18,10 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/slab.h>
+
 #include "vtunerc_priv.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0)
- #include "dvb_frontend.h"
-#else
- #include <media/dvb_frontend.h>
-#endif
+#include <media/dvb_frontend.h>
 
 #if (DVB_API_VERSION << 8 | DVB_API_VERSION_MINOR) < 0x0505
  #error ========================================================================
@@ -40,11 +37,7 @@ struct dvb_proxyfe_state {
 	struct vtunerc_ctx *ctx;
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
-static int dvb_proxyfe_read_status(struct dvb_frontend *fe, fe_status_t *status)
-#else
 static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *status)
-#endif
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
@@ -90,14 +83,8 @@ static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 }
 
 /*
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
-static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe)
-{
-	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
-#else
 static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe, struct dtv_frontend_properties *c)
 {
-#endif
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
@@ -207,13 +194,6 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 	return dvb_proxyfe_set_frontend(fe);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
-static int dvb_proxyfe_get_property(struct dvb_frontend *fe, struct dtv_property* tvp)
-{
-	return 0;
-}
-#endif
-
 static enum dvbfe_algo dvb_proxyfe_get_frontend_algo(struct dvb_frontend *fe)
 {
 	return DVBFE_ALGO_HW;
@@ -229,11 +209,7 @@ static int dvb_proxyfe_init(struct dvb_frontend *fe)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
-static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, fe_sec_tone_mode_t tone)
-#else
 static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode tone)
-#endif
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
@@ -242,11 +218,7 @@ static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode t
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
-static int dvb_proxyfe_set_voltage(struct dvb_frontend *fe, fe_sec_voltage_t voltage)
-#else
 static int dvb_proxyfe_set_voltage(struct dvb_frontend *fe, enum fe_sec_voltage voltage)
-#endif
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
@@ -264,11 +236,7 @@ static int dvb_proxyfe_send_diseqc_msg(struct dvb_frontend *fe, struct dvb_diseq
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
-static int dvb_proxyfe_send_diseqc_burst(struct dvb_frontend *fe, fe_sec_mini_cmd_t burst)
-#else
 static int dvb_proxyfe_send_diseqc_burst(struct dvb_frontend *fe, enum fe_sec_mini_cmd burst)
-#endif
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
@@ -332,9 +300,7 @@ static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *ctx, int
 	memcpy(&fe->ops, &dvb_proxyfe_qpsk_ops, sizeof(struct dvb_frontend_ops));
 	if (can_2g_modulation) {
 		fe->ops.info.caps |= FE_CAN_2G_MODULATION;
-#ifdef HAS_DELSYS
 		fe->ops.delsys[1] = SYS_DVBS2;
-#endif
 		strcpy(fe->ops.info.name, "vTuner proxyFE DVB-S2");
 	}
 
@@ -367,21 +333,12 @@ static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *ctx)
 }
 
 static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
-#ifdef HAS_DELSYS
         .delsys = { SYS_DVBT },
-#endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-T",
-#if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_min_hz	= 51 * MHz,
 		.frequency_max_hz	= 863250 * kHz,
 		.frequency_stepsize_hz	= 62500,
-#else
-		.type			= FE_OFDM,
-		.frequency_min		= 51000000,
-		.frequency_max		= 863250000,
-		.frequency_stepsize	= 62500,
-#endif
 		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 | FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 |
 			FE_CAN_FEC_8_9 | FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_64 | FE_CAN_QAM_AUTO | FE_CAN_TRANSMISSION_MODE_AUTO |
 			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO,
@@ -393,9 +350,6 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 	.sleep = dvb_proxyfe_sleep,
 
 	.set_frontend = dvb_proxyfe_set_frontend,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
-	.get_property = dvb_proxyfe_get_property,
-#endif
 	.read_status = dvb_proxyfe_read_status,
 	.read_ber = dvb_proxyfe_read_ber,
 	.read_signal_strength = dvb_proxyfe_read_signal_strength,
@@ -404,21 +358,12 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
 };
 
 static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
-#ifdef HAS_DELSYS
         .delsys = { SYS_DVBC_ANNEX_A },
-#endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-C",
-#if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_stepsize_hz	= 62500,
 		.frequency_min_hz	= 51 * MHz,
 		.frequency_max_hz	= 858 * MHz,
-#else
-		.type			= FE_QAM,
-		.frequency_stepsize	= 62500,
-		.frequency_min		= 51000000,
-		.frequency_max		= 858000000,
-#endif
 		.symbol_rate_min	= (57840000/2)/64,     /* SACLK/64 == (XIN/2)/64 */
 		.symbol_rate_max	= (57840000/2)/4,      /* SACLK/4 */
 		.caps = FE_CAN_QAM_16 | FE_CAN_QAM_32 | FE_CAN_QAM_64 | FE_CAN_QAM_128 | FE_CAN_QAM_256 | FE_CAN_FEC_AUTO | FE_CAN_INVERSION_AUTO
@@ -439,23 +384,13 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
 };
 
 static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
-#ifdef HAS_DELSYS
         .delsys = { SYS_DVBS },
-#endif
 	.info = {
 		.name			= "vTuner proxyFE DVB-S",
-#if LINUX_VERSION_CODE > KERNEL_VERSION(4,15,0)
 		.frequency_min_hz	= 950 * MHz,
 		.frequency_max_hz	= 2150 * MHz,
 		.frequency_stepsize_hz	= 250 * kHz,           /* kHz for QPSK frontends */
 		.frequency_tolerance_hz	= 29500 * kHz,
-#else
-		.type			= FE_QPSK,
-		.frequency_min		= 950000,
-		.frequency_max		= 2150000,
-		.frequency_stepsize	= 250,           /* kHz for QPSK frontends */
-		.frequency_tolerance	= 29500,
-#endif
 		.symbol_rate_min	= 1000000,
 		.symbol_rate_max	= 45000000,
 		.caps = FE_CAN_INVERSION_AUTO | FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |

@@ -1,4 +1,4 @@
-Virtualized DVB driver for kernels 3.10 ... 6.x 
+Virtualized DVB driver for kernels 4.16 ... 6.x 
 From former project named "vtuner" by Honza Petrous.
 
 Driver is registering the following devices:

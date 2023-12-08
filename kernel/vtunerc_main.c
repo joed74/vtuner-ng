@@ -25,21 +25,12 @@
 #include <linux/seq_file.h>
 #include "vtunerc_priv.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION (4,16,0)
- #include "demux.h"
- #include "dmxdev.h"
- #include "dvb_demux.h"
- #include "dvb_frontend.h"
- #include "dvb_net.h"
- #include "dvbdev.h"
-#else
- #include <media/demux.h>
- #include <media/dmxdev.h>
- #include <media/dvb_demux.h>
- #include <media/dvb_frontend.h>
- #include <media/dvb_net.h>
- #include <media/dvbdev.h>
-#endif
+#include <media/demux.h>
+#include <media/dmxdev.h>
+#include <media/dvb_demux.h>
+#include <media/dvb_frontend.h>
+#include <media/dvb_net.h>
+#include <media/dvbdev.h>
 
 #define VTUNERC_MODULE_VERSION "2.0"
 
@@ -78,28 +69,20 @@ static int pidtab_find_index(unsigned short *pidtab, int pid)
 static int pidtab_add_pid(unsigned short *pidtab, int pid)
 {
 	int i;
-
-	/* TODO: speed-up hint: add pid sorted */
-
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (pidtab[i] == PID_UNKNOWN) {
 			pidtab[i] = pid;
 			return 0;
 		}
-
 	return -1;
 }
 
 static int pidtab_del_pid(unsigned short *pidtab, int pid)
 {
 	int i;
-
-	/* TODO: speed-up hint: delete sorted */
-
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (pidtab[i] == pid) {
 			pidtab[i] = PID_UNKNOWN;
-			/* TODO: move rest */
 			return 0;
 		}
 
@@ -111,8 +94,7 @@ static void pidtab_copy_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *m
 	int i;
 
 	for (i = 0; i < MAX_PIDTAB_LEN ; i++)
-		msg->body.pidlist[i] = ctx->pidtab[i]; /*TODO: optimize it*/
-	/* msg->body.pidlist[MAX_PIDTAB_LEN - 1] = 0; */
+		msg->body.pidlist[i] = ctx->pidtab[i];
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
@@ -126,11 +108,6 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 		break;
 	case DMX_TYPE_SEC:
 		break;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
-	case DMX_TYPE_PES:
-		printk(KERN_ERR "vtunerc%d: feed type PES is not supported\n", ctx->idx);
-		return -EINVAL;
-#endif
 	default:
 		printk(KERN_ERR "vtunerc%d: feed type %d is not supported\n", ctx->idx, feed->type);
 		return -EINVAL;
