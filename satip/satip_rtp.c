@@ -50,8 +50,18 @@ typedef struct satip_rtp
 } t_satip_rtp;
 
 
+static void set_status(int fd, unsigned char status, unsigned short ss, unsigned int ber)
+{
+	struct vtuner_signal sig;
+	sig.status = status;
+	sig.ss = ss;
+	sig.ber = ber;
+	sig.snr = 0;
+	sig.ucb = 0;
+	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
+}
 
-static void rtp_data(unsigned char* buffer,int rx)
+static void rtp_data(int fd, unsigned char* buffer,int rx)
 {
   int done=0;
   uint32_t* buf=(uint32_t*) buffer;
@@ -59,6 +69,12 @@ static void rtp_data(unsigned char* buffer,int rx)
   int plen;
   int pt;
   char infobuf[200];
+
+  unsigned int ber;
+  unsigned short ss;
+  unsigned char status;
+
+  int update_status=0;
 
   while(done<rx)
     {
@@ -84,6 +100,32 @@ static void rtp_data(unsigned char* buffer,int rx)
 		  snprintf(infobuf,val,"%s",(char*) &buf[4]);
 		  infobuf[val]=0;
 		  DEBUG(MSG_MAIN,"RTCP: app info: %s\n",infobuf);
+		  char *token;
+		  char *rest = infobuf;
+		  int nr=0;
+		  while ((token = strtok_r(rest, ",", &rest)))
+		  {
+			if (nr==1) {
+				// Signal level 0-255
+				int act_ss=atoi(token);
+				if (act_ss!=ss) update_status=1;
+				ss=act_ss;
+			}
+			if (nr==2) {
+				// Fronend lock
+				unsigned char act_status=FE_HAS_SIGNAL;
+				if (token[0]=='1') act_status=FE_HAS_LOCK;
+				if (act_status!=status) update_status=1;
+				status=act_status;
+			}
+			if (nr==3) {
+				// Quality (BER)
+				int act_ber=atoi(token);
+				if (act_ber!=ber) update_status=1;
+				ber=act_ber;
+			}
+			nr++;
+		  }
 		}
 	    }
 
@@ -93,19 +135,15 @@ static void rtp_data(unsigned char* buffer,int rx)
 	  DEBUG(MSG_MAIN,"RTCP: packet type %d len %d\n",pt,plen);
 	}
 
+      if (update_status) {
+	      DEBUG(MSG_MAIN,"RTCP: update status=%i ss=%i ber=%i\n",status,ss,ber);
+	      set_status(fd, status, ss, ber);
+	      update_status=0;
+      }
+
       buf+=plen+1;
       done+=(plen+1)*4;
     }
-}
-
-static void set_status(int fd, unsigned short ss, unsigned int ber, unsigned short snr, unsigned int ucb)
-{
-	struct vtuner_signal sig;
-	sig.ss = ss;
-	sig.ber = ber;
-	sig.snr = snr;
-	sig.ucb = ucb;
-	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
 }
 
 static void* rtp_receiver(void* param)
@@ -154,6 +192,7 @@ static void* rtp_receiver(void* param)
 	  if ( rx>12 && rxbuf[12] == 0x47 )
 	    {
       		wr = write(srtp->fd,&rxbuf[12],rx-12);
+//		set_status(srtp->fd, FE_HAS_LOCK, 65535, 15);
 		DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
 	    }
 	    else
@@ -170,7 +209,7 @@ static void* rtp_receiver(void* param)
 	  pollfds[1].revents = 0;
 
 	  rx=recv(pollfds[1].fd, rxbuf, 32768,0);
-	  rtp_data(rxbuf,rx);
+	  rtp_data(srtp->fd, rxbuf,rx);
 	  DEBUG(MSG_DATA,"RTCP: rd %d\n",rx);
 	}
 

@@ -180,7 +180,7 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 static void status2str(struct seq_file *seq, u8 status)
 {
-	seq_puts(seq, "  Status    : ");
+	seq_puts(seq, "  Status      : ");
 	switch (status) {
 		case FE_HAS_SIGNAL:
 		  seq_puts(seq, "FE_HAS_SIGNAL");
@@ -209,19 +209,201 @@ static void status2str(struct seq_file *seq, u8 status)
 	seq_puts(seq, "\n");
 }
 
+static void delsys2str(struct seq_file *seq, enum fe_delivery_system delsys)
+{
+	seq_puts(seq, "  System      : ");
+	switch (delsys) {
+		case SYS_DVBC_ANNEX_A:
+		case SYS_DVBC_ANNEX_B:
+		case SYS_DVBC_ANNEX_C:
+		  seq_puts(seq, "DVB-C");
+		  break;
+		case SYS_DVBT:
+		  seq_puts(seq, "DVB-T");
+		  break;
+		case SYS_DVBT2:
+		  seq_puts(seq, "DVB-T2");
+		  break;
+		case SYS_DVBS:
+		  seq_puts(seq, "DVB-S");
+		  break;
+		case SYS_DVBS2:
+		  seq_puts(seq, "DVB-S2");
+		  break;
+		default:
+		  seq_puts(seq, "undefined");
+		  break;
+	}
+	seq_puts(seq, "\n");
+}
+
+
+static void satfreq2str(struct seq_file *seq, int frequency, enum fe_sec_tone_mode sectone)
+{
+	int freq = frequency / 100;
+	if (sectone == SEC_TONE_ON)
+	   freq += 106000;
+	else
+	  if (freq-97500 < 0)
+	     freq += 97500;
+	  else
+	     freq -= 97500;
+
+	seq_printf(seq, "  Frequency   : %i\n", freq/10);
+}
+
+static void fec2str(struct seq_file *seq, enum fe_code_rate fec)
+{
+	seq_puts(seq, "  FEC         : ");
+	switch (fec) {
+		case FEC_1_2:
+		  seq_puts(seq, "1/2");
+		  break;
+		case FEC_2_3:
+		  seq_puts(seq, "2/3");
+		  break;
+		case FEC_3_4:
+		  seq_puts(seq, "3/4");
+		  break;
+		case FEC_4_5:
+		  seq_puts(seq, "4/5");
+		  break;
+		case FEC_5_6:
+		  seq_puts(seq, "5/6");
+		  break;
+		case FEC_6_7:
+		  seq_puts(seq, "6/7");
+		  break;
+		case FEC_7_8:
+		  seq_puts(seq, "7/8");
+		  break;
+		case FEC_8_9:
+		  seq_puts(seq, "8/9");
+		  break;
+		case FEC_AUTO:
+		  seq_puts(seq, "auto");
+		  break;
+		case FEC_3_5:
+		  seq_puts(seq, "3/5");
+		  break;
+		case FEC_9_10:
+		  seq_puts(seq, "9/10");
+		  break;
+		case FEC_2_5:
+		  seq_puts(seq, "2/5");
+		  break;
+		default:
+		  seq_puts(seq, "unknown");
+		  break;
+	}
+	seq_puts(seq, "\n");
+}
+
+static void mod2str(struct seq_file *seq, enum fe_modulation modulation)
+{
+	seq_puts(seq, "  Modulation  : ");
+	switch (modulation) {
+		case QPSK:
+		  seq_puts(seq, "QPSK");
+		  break;
+		case QAM_16:
+		  seq_puts(seq, "QAM 16");
+		  break;
+		case QAM_32:
+		  seq_puts(seq, "QAM 32");
+		  break;
+		case QAM_64:
+		  seq_puts(seq, "QAM 64");
+		  break;
+		case QAM_128:
+		  seq_puts(seq, "QAM 128");
+		  break;
+		case QAM_AUTO:
+		  seq_puts(seq, "QUAM AUTO");
+		  break;
+		case PSK_8:
+		  seq_puts(seq, "PSK 8");
+		  break;
+		case DQPSK:
+		  seq_puts(seq, "DQPSK");
+		  break;
+		case QAM_4_NR:
+		  seq_puts(seq, "QAM 4 NR");
+		  break;
+		default:
+		  seq_puts(seq, "unknown"); 
+	}
+	seq_puts(seq, "\n");
+}
+
+static void roff2str(struct seq_file *seq, enum fe_rolloff rolloff)
+{
+	seq_puts(seq, "  Rolloff     : ");
+	switch (rolloff) {
+		case ROLLOFF_35:
+		  seq_puts(seq, "0.35");
+		  break;
+		case ROLLOFF_20:
+		  seq_puts(seq, "0.20");
+		  break;
+		case ROLLOFF_25:
+		  seq_puts(seq, "0.25");
+		  break;
+		case ROLLOFF_AUTO:
+		  seq_puts(seq, "auto");
+		  break;
+		default:
+		  seq_puts(seq, "unknown");
+		  break;
+	}
+	seq_puts(seq, "\n");
+}
+
+static void pilot2str(struct seq_file *seq, enum fe_pilot pilot)
+{
+	seq_puts(seq, "  Pilot       : ");
+	switch (pilot) {
+		case PILOT_ON:
+		  seq_puts(seq, "on");
+		  break;
+		case PILOT_OFF:
+		  seq_puts(seq, "off");
+		  break;
+		case PILOT_AUTO:
+		  seq_puts(seq, "auto");
+		  break;
+		default:
+		  seq_puts(seq, "unknown");
+	}
+	seq_puts(seq, "\n");
+}
+
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
 	int i, pcnt = 0;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
 
 	seq_printf(seq, "[ vtunerc driver, version " VTUNERC_MODULE_VERSION " ]\n");
-	seq_printf(seq, "  FE type   : %i\n", ctx->vtype);
-	seq_printf(seq, "  Used by   : %u\n", ctx->fd_opened);
-	status2str(seq, ctx->fe_status);
-	seq_printf(seq, "  Frequency : %i\n", ctx->fe ? ctx->fe->dtv_property_cache.frequency : 0);
-	seq_printf(seq, "  Inversion : %i\n", ctx->fe ? ctx->fe->dtv_property_cache.inversion : 0);
-	seq_printf(seq, "  TS data   : %u\n", ctx->stat_wr_data);
-	seq_printf(seq, "  PID tab   :");
+	seq_printf(seq, "  FE type     : %i\n", ctx->vtype);
+	seq_printf(seq, "  Used by     : %u\n", ctx->fd_opened);
+	status2str(seq, ctx->signal.status);
+	if (ctx->stat_time>0)
+		seq_printf(seq, "  Last change : %lli\n", ktime_get_seconds()-ctx->stat_time);
+	if (ctx->fe) {
+		struct fe_params *fep = &ctx->fe_params;
+		if (fep->frequency>0) {
+			delsys2str(seq, fep->delivery_system);
+			if (fep->delivery_system==VT_S || fep->delivery_system==VT_S2) {
+				mod2str(seq, fep->u.qpsk.modulation);
+				satfreq2str(seq, fep->frequency, fep->u.qpsk.sat.tone);
+				seq_printf(seq, "  Symbolrate  : %i\n", fep->u.qpsk.symbol_rate / 1000);
+				fec2str(seq, fep->u.qpsk.fec_inner);
+				roff2str(seq, fep->u.qpsk.rolloff);
+				pilot2str(seq, fep->u.qpsk.pilot);
+			}
+		}
+	}
+	seq_printf(seq, "  PID tab     :");
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (ctx->pidtab[i] != PID_UNKNOWN) {
 			seq_printf(seq, " %i", ctx->pidtab[i]);
@@ -229,13 +411,14 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 		}
 
 	seq_printf(seq, " (len=%d)\n", pcnt);
+	seq_printf(seq, "  TS data     : %u\n", ctx->stat_wr_data);
 	return 0;
 }
 
 static int vtunerc_proc_open(struct inode *inode, struct file *file)
 {
 	int ret;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,17,0) 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,17,0)
 	struct vtunerc_ctx *ctx = PDE_DATA(inode);
 #else
 	struct vtunerc_ctx *ctx = pde_data(inode);
@@ -298,7 +481,7 @@ static int __init vtunerc_init(void)
 
 	printk(KERN_INFO "virtual DVB adapter driver, version " VTUNERC_MODULE_VERSION ", (c) 2021 Honza Petrous, SmartImp.cz\n");
 
-	request_module("dvb-core"); /* FIXME: dunno which way it should work :-/ */
+	request_module("dvb-core");
 
 	for (idx = 0; idx < config.devices; idx++) {
 		ctx = kzalloc(sizeof(struct vtunerc_ctx), GFP_KERNEL);

@@ -396,12 +396,13 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
 
   /* DVB-S mandatory parameters */
   printed = snprintf(str, maxlen, 
-		     "src=%d&%sfreq=%d.%d&pol=%c&msys=%s&sr=%d&fec=%s",
+		     "src=%d&%sfreq=%d.%d&pol=%c&msys=%s&mtype=%s&sr=%d&fec=%s",
 		     cfg->position,
 		     frontend_str,
 		     cfg->frequency/10, cfg->frequency%10,
 		     strmap_polarization[cfg->polarization],
 		     cfg->mod_sys == SATIPCFG_MS_DVB_S ? "dvbs" : "dvbs2",
+                     cfg->mod_type == SATIPCFG_MT_QPSK ? "qpsk" : "8psk",
 		     cfg->symbol_rate,
 		     strmap_fecinner[cfg->fec_inner]);
 
@@ -412,9 +413,8 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
   /* DVB-S2 additional required parameters */
   if ( cfg->mod_sys == SATIPCFG_MS_DVB_S2 )
     {
-      printed += snprintf(str, maxlen-printed, "&ro=%s&mtype=%s&plts=%s",
+      printed += snprintf(str, maxlen-printed, "&ro=%s&plts=%s",
 			 strmap_rolloff[cfg->roll_off],
-			 cfg->mod_type == SATIPCFG_MT_QPSK ? "qpsk" : "8psk",
 			 cfg->pilots == SATIPCFG_P_OFF ? "off" : "on" );
     }
 

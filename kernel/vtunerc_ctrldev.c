@@ -89,7 +89,6 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 	}
 
-	ctx->fe_status = FE_HAS_LOCK;
 	ctx->stat_wr_data += len;
 	dvb_dmx_swfilter_packets(demux, ctx->kernel_buf, len / 188);
 
@@ -133,8 +132,6 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 	if (ctx == NULL)
 		return -ENOMEM;
 
-	/*FIXME: clear pidtab */
-
 	ctx->fd_opened++;
 	ctx->closing = 0;
 
@@ -144,12 +141,19 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
-	int minor;
+	int i, minor;
 	struct vtuner_message fakemsg;
 
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
 	ctx->fd_opened--;
+	if (ctx->fd_opened == 0) {
+		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
+		memset(&ctx->fe_params,0,sizeof(struct fe_params));
+		memset(&ctx->pidtab,0,sizeof(unsigned short)*MAX_PIDTAB_LEN);
+		for (i = 0; i < MAX_PIDTAB_LEN; i++)
+			ctx->pidtab[i] = PID_UNKNOWN;
+	}
 	ctx->closing = 1;
 
 	minor = MINOR(inode->i_rdev);

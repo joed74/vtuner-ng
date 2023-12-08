@@ -49,7 +49,7 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *stat
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 
-	*status = ctx->fe_status;
+	*status = ctx->signal.status;
 	return 0;
 }
 
@@ -152,9 +152,11 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
-	ctx->fe_status = FE_HAS_CARRIER;
+	if (ctx->fd_opened < 1) return -EAGAIN;
+	if (c->frequency == 0) return -EINVAL;
 
 	memset(&msg, 0, sizeof(msg));
+	msg.body.fe_params.delivery_system = c->delivery_system;
 	msg.body.fe_params.frequency = c->frequency;
 	msg.body.fe_params.inversion = c->inversion;
 
@@ -166,7 +168,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.body.fe_params.u.qpsk.modulation = c->modulation;
 		msg.body.fe_params.u.qpsk.pilot = c->pilot;
 		msg.body.fe_params.u.qpsk.rolloff = c->rolloff;
-		msg.body.fe_params.u.qpsk.delivery_system = ctx->vtype;
+		memcpy(&msg.body.fe_params.u.qpsk.sat, &ctx->fe_params.u.qpsk.sat, sizeof(struct sat_params));
 		break;
 	case VT_T:
 		msg.body.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
@@ -187,10 +189,22 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		return -EINVAL;
 	}
 
+	if (memcmp(&msg.body.fe_params, &ctx->fe_params, sizeof(struct fe_params))==0) return 0; // no change
+
+	printk(KERN_NOTICE "vtunerc%d: sending MSG_SET_FRONTEND freq=%i\n", ctx->idx, c->frequency);
+
+	ctx->stat_time = ktime_get_seconds();
+	ctx->signal.status = FE_NONE;
+
 	msg.type = MSG_SET_FRONTEND;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
+	memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
 	return 0;
+}
+
+static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int mode_flags, unsigned int *delay, enum fe_status *status)
+{
+	return dvb_proxyfe_set_frontend(fe);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
@@ -202,7 +216,7 @@ static int dvb_proxyfe_get_property(struct dvb_frontend *fe, struct dtv_property
 
 static enum dvbfe_algo dvb_proxyfe_get_frontend_algo(struct dvb_frontend *fe)
 {
-	return DVBFE_ALGO_SW;
+	return DVBFE_ALGO_HW;
 }
 
 static int dvb_proxyfe_sleep(struct dvb_frontend *fe)
@@ -223,12 +237,8 @@ static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode t
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.body.tone = tone;
-	msg.type = MSG_SET_TONE;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
+	ctx->fe_params.u.qpsk.sat.tone = tone;
 	return 0;
 }
 
@@ -240,12 +250,8 @@ static int dvb_proxyfe_set_voltage(struct dvb_frontend *fe, enum fe_sec_voltage 
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.body.voltage = voltage;
-	msg.type = MSG_SET_VOLTAGE;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
+	ctx->fe_params.u.qpsk.sat.voltage = voltage;
 	return 0;
 }
 
@@ -253,12 +259,8 @@ static int dvb_proxyfe_send_diseqc_msg(struct dvb_frontend *fe, struct dvb_diseq
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	memcpy(&msg.body.diseqc_master_cmd, cmd, sizeof(struct dvb_diseqc_master_cmd));
-	msg.type = MSG_SEND_DISEQC_MSG;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
+	memcpy(&ctx->fe_params.u.qpsk.sat.diseqc_master_cmd, cmd, sizeof(struct dvb_diseqc_master_cmd));
 	return 0;
 }
 
@@ -270,12 +272,8 @@ static int dvb_proxyfe_send_diseqc_burst(struct dvb_frontend *fe, enum fe_sec_mi
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 
-	msg.body.burst = burst;
-	msg.type = MSG_SEND_DISEQC_BURST;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
+	ctx->fe_params.u.qpsk.sat.burst = burst;
 	return 0;
 }
 
@@ -471,6 +469,7 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 
 	.get_frontend_algo = dvb_proxyfe_get_frontend_algo,
 	.set_frontend = dvb_proxyfe_set_frontend,
+	.tune = dvb_proxyfe_tune,
 
 	.read_status = dvb_proxyfe_read_status,
 	.read_ber = dvb_proxyfe_read_ber,

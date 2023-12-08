@@ -19,6 +19,7 @@
 
 #include <linux/module.h>	/* Specifically, a module */
 #include <linux/kernel.h>	/* We're doing kernel work */
+#include <linux/time.h>
 #include <linux/cdev.h>
 #include <linux/version.h>
 
@@ -65,9 +66,9 @@ struct vtunerc_ctx {
 	int idx;
 	char *fe_type;
 	u8 vtype;
-	u8 fe_status;
 	struct vtunerc_config *config;
 	struct vtuner_signal signal;
+	struct fe_params fe_params;
 
 	unsigned short pidtab[MAX_PIDTAB_LEN];
 
@@ -91,6 +92,7 @@ struct vtunerc_ctx {
 
 	/* proc statistics */
 	unsigned int stat_wr_data;
+	time64_t stat_time;
 };
 
 int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx);

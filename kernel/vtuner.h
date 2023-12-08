@@ -28,11 +28,7 @@
 #define VT_T	16
 
 #define MSG_SET_FRONTEND		10
-#define MSG_SET_TONE			12
-#define MSG_SET_VOLTAGE			13
-#define MSG_SEND_DISEQC_MSG		14
-#define MSG_SEND_DISEQC_BURST		15
-#define MSG_PIDLIST			16
+#define MSG_PIDLIST			20
 
 #define MAX_PIDTAB_LEN			30
 
@@ -57,50 +53,57 @@ struct diseqc_master_cmd {
 	u8 msg_len;
 };
 
+struct sat_params {
+	u8	tone;
+	u8	voltage;
+	struct	diseqc_master_cmd diseqc_master_cmd;
+	u8	burst;
+};
+
+struct fe_params {
+	u32	delivery_system;
+	u32	frequency;
+	u8	inversion;
+	union {
+		struct {
+			// DVB-S , DVB-S2
+			u32	symbol_rate;
+			u32	fec_inner;
+			u32	modulation;
+			u32	pilot;
+			u32	rolloff;
+			struct sat_params sat;
+		} qpsk;
+		struct {
+			// DVB-C
+			u32	symbol_rate;
+			u32	fec_inner;
+			u32	modulation;
+		} qam;
+		struct {
+			// DVB-T
+			u32	bandwidth;
+			u32	code_rate_HP;
+			u32	code_rate_LP;
+			u32	constellation;
+			u32	transmission_mode;
+			u32	guard_interval;
+			u32	hierarchy_information;
+		} ofdm;
+	} u;
+};
+
 struct vtuner_message {
 	s32 type;
 	union {
-		struct {
-			u32	frequency;
-			u8	inversion;
-			union {
-				struct {
-					// DVB-S , DVB-S2
-					u32	symbol_rate;
-					u32	fec_inner;
-					u32	modulation;
-					u32	pilot;
-					u32	rolloff;
-					u32	delivery_system;
-				} qpsk;
-				struct {
-					// DVB-C
-					u32	symbol_rate;
-					u32	fec_inner;
-					u32	modulation;
-				} qam;
-				struct {
-					// DVB-T
-					u32	bandwidth;
-					u32	code_rate_HP;
-					u32	code_rate_LP;
-					u32	constellation;
-					u32	transmission_mode;
-					u32	guard_interval;
-					u32	hierarchy_information;
-				} ofdm;
-			} u;
-		} fe_params;
-		u8 tone;
-		u8 voltage;
-		struct diseqc_master_cmd diseqc_master_cmd;
-		u8 burst;
+		struct fe_params fe_params;
 		u16 pidlist[MAX_PIDTAB_LEN];
 	} body;
 };
 
 struct vtuner_signal
 {
+	u8 status;
 	u32 ber;
 	u16 ss;
 	u16 snr;

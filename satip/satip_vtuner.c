@@ -5,7 +5,7 @@
  * [fragments from vtuner by Honza Petrous]
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as 
+ * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -53,8 +53,6 @@ extern char* const strmap_rolloff[];
 
 typedef struct satip_vtuner {
   int fd;
-  int tone;
-  char tone_set;
   t_satip_config* satip_cfg;
 } t_satip_vtuner;
 
@@ -70,18 +68,16 @@ t_satip_vtuner* satip_vtuner_new(char* devname,t_satip_config* satip_cfg)
       ERROR(MSG_MAIN,"Couldn't open %s\n",devname);
       return NULL;
     }
-  
+
   if (ioctl(fd, VTUNER_SET_TYPE, "DVB-S2")) return NULL;
-  
+
   vt=(t_satip_vtuner*)malloc(sizeof(t_satip_vtuner));
-  
+
   vt->fd=fd;
   vt->satip_cfg=satip_cfg;
-  
+
   /* set default position A, if appl. does not configure */
   satip_set_position(satip_cfg,1);
-
-  vt->tone_set=0;
 
   return vt;
 }
@@ -92,18 +88,75 @@ int satip_vtuner_fd(struct satip_vtuner* vt)
 }
 
 
+static void set_voltage(struct satip_vtuner* vt, struct vtuner_message* msg)
+{
+  if ( msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_13 )
+    satip_set_polarization(vt->satip_cfg, SATIPCFG_P_VERTICAL);
+  else if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_18)
+    satip_set_polarization(vt->satip_cfg, SATIPCFG_P_HORIZONTAL);
+  else  /*  SEC_VOLTAGE_OFF */
+    satip_lnb_off(vt->satip_cfg);
+
+  DEBUG(MSG_MAIN,"set voltage:  %d\n",msg->body.fe_params.u.qpsk.sat.voltage);
+}
+
+static void diseqc_msg(struct satip_vtuner* vt, struct vtuner_message* msg)
+{
+  char dbg[50];
+  struct diseqc_master_cmd* cmd=&msg->body.fe_params.u.qpsk.sat.diseqc_master_cmd;
+
+  if ( cmd->msg[0] == 0xe0 &&
+       cmd->msg[1] == 0x10 &&
+       cmd->msg[2] == 0x38 &&
+       cmd->msg_len == 4 )
+    {
+      /* committed switch */
+      u8 data=cmd->msg[3];
+
+      if ( (data & 0x01) == 0x01 )
+	{
+	  msg->body.fe_params.u.qpsk.sat.tone = SEC_TONE_ON; /* high band */
+	}
+      else if ( (data & 0x11) == 0x10 )
+	{
+	  msg->body.fe_params.u.qpsk.sat.tone = SEC_TONE_OFF; /* low band */
+	}
+
+      if ( (data & 0x02) == 0x02 )
+	satip_set_polarization(vt->satip_cfg, SATIPCFG_P_HORIZONTAL);	
+      else if ( (data & 0x22) == 0x20 )
+	satip_set_polarization(vt->satip_cfg, SATIPCFG_P_VERTICAL);
+
+      /* some invalid combinations ? */
+      satip_set_position(vt->satip_cfg, ( (data & 0x0c) >> 2) + 1 );
+
+
+      sprintf(dbg,"%02x %02x %02x   msg %02x %02x %02x len %d",
+	  cmd->msg[0],
+	  cmd->msg[1],
+	  cmd->msg[2],
+	  cmd->msg[3],
+	  cmd->msg[4],
+	  cmd->msg[5],
+	  cmd->msg_len);
+       DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_MSG:  %s\n",dbg);
+    }
+}
+
 static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
+  set_voltage(vt, msg);
+  diseqc_msg(vt, msg);
+
+  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_A)
+      satip_set_position(vt->satip_cfg,1);
+  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_B)
+      satip_set_position(vt->satip_cfg,2);
+
   int frequency = msg->body.fe_params.frequency/100;
 
-  if ( !vt->tone_set ) 
-    {
-      DEBUG(MSG_MAIN,"cannot tune: no band selected\n");
-      return;
-    } 
-
   /* revert frequency shift */
-  if ( vt->tone == SEC_TONE_ON ) /* high band */
+  if ( msg->body.fe_params.u.qpsk.sat.tone == SEC_TONE_ON ) /* high band */
     frequency += 106000;
   else /* low band */
     if ( frequency-97500 < 0 )
@@ -115,12 +168,12 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 
   /* symbol rate */
   satip_set_symbol_rate(vt->satip_cfg, msg->body.fe_params.u.qpsk.symbol_rate/1000 );
-  
+
   /* FEC */
   satip_set_fecinner(vt->satip_cfg, msg->body.fe_params.u.qpsk.fec_inner);
 
   /* delivery system */
-  satip_set_modsys(vt->satip_cfg, msg->body.fe_params.u.qpsk.delivery_system);
+  satip_set_modsys(vt->satip_cfg, msg->body.fe_params.delivery_system);
 
   /* Modulation */
   satip_set_modtype(vt->satip_cfg, msg->body.fe_params.u.qpsk.modulation);
@@ -133,76 +186,10 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 
   DEBUG(MSG_MAIN,"MSG_SET_FRONTEND freq: %d symrate: %d fec: %s rol: %s \n",
 	frequency,
-	msg->body.fe_params.u.qpsk.symbol_rate, 
+	msg->body.fe_params.u.qpsk.symbol_rate,
 	strmap_fecinner[msg->body.fe_params.u.qpsk.fec_inner],
 	strmap_rolloff[msg->body.fe_params.u.qpsk.rolloff] );
 }
-
-static void set_tone(struct satip_vtuner* vt, struct vtuner_message* msg)
-{
-  vt->tone = msg->body.tone;
-  vt->tone_set = 1;
-
-  DEBUG(MSG_MAIN,"MSG_SET_TONE:  %s\n",vt->tone == SEC_TONE_ON  ? "ON = high band" : "OFF = low band");  
-}
-
-
-static void set_voltage(struct satip_vtuner* vt, struct vtuner_message* msg)
-{
-  if ( msg->body.voltage == SEC_VOLTAGE_13 )
-    satip_set_polarization(vt->satip_cfg, SATIPCFG_P_VERTICAL);
-  else if (msg->body.voltage == SEC_VOLTAGE_18)
-    satip_set_polarization(vt->satip_cfg, SATIPCFG_P_HORIZONTAL);
-  else  /*  SEC_VOLTAGE_OFF */
-    satip_lnb_off(vt->satip_cfg);
-  
-  DEBUG(MSG_MAIN,"MSG_SET_VOLTAGE:  %d\n",msg->body.voltage);
-}
-
-
-static void diseqc_msg(struct satip_vtuner* vt, struct vtuner_message* msg)
-{
-  char dbg[50];
-  struct diseqc_master_cmd* cmd=&msg->body.diseqc_master_cmd;
-  
-  if ( cmd->msg[0] == 0xe0 &&
-       cmd->msg[1] == 0x10 &&
-       cmd->msg[2] == 0x38 &&
-       cmd->msg_len == 4 )
-    {
-      /* committed switch */
-      u8 data=cmd->msg[3];
-
-      if ( (data & 0x01) == 0x01 )
-	{
-	  vt->tone = SEC_TONE_ON; /* high band */
-	  vt->tone_set=1;
-	}
-      else if ( (data & 0x11) == 0x10 )
-	{
-	  vt->tone = SEC_TONE_OFF; /* low band */
-	  vt->tone_set=1;
-	}
-
-      if ( (data & 0x02) == 0x02 )
-	satip_set_polarization(vt->satip_cfg, SATIPCFG_P_HORIZONTAL);	
-      else if ( (data & 0x22) == 0x20 )
-	satip_set_polarization(vt->satip_cfg, SATIPCFG_P_VERTICAL);
-
-      /* some invalid combinations ? */
-      satip_set_position(vt->satip_cfg, ( (data & 0x0c) >> 2) + 1 );
-    }
-  
-  sprintf(dbg,"%02x %02x %02x   msg %02x %02x %02x len %d",
-	  msg->body.diseqc_master_cmd.msg[0],
-	  msg->body.diseqc_master_cmd.msg[1],
-	  msg->body.diseqc_master_cmd.msg[2],
-	  msg->body.diseqc_master_cmd.msg[3],
-	  msg->body.diseqc_master_cmd.msg[4],
-	  msg->body.diseqc_master_cmd.msg[5],
-	  msg->body.diseqc_master_cmd.msg_len);
-  DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_MSG:  %s\n",dbg);
-}      
 
 static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
@@ -228,7 +215,7 @@ void satip_vtuner_event(struct satip_vtuner* vt)
 {
   struct vtuner_message  msg;
 
-  if (ioctl(vt->fd, VTUNER_GET_MESSAGE, &msg)) 
+  if (ioctl(vt->fd, VTUNER_GET_MESSAGE, &msg))
     return;
 
   switch(msg.type)
@@ -237,40 +224,18 @@ void satip_vtuner_event(struct satip_vtuner* vt)
       set_frontend(vt,&msg);
       break;
 
-    case MSG_SET_TONE:
-      set_tone(vt,&msg);
-      break;
-
-    case MSG_SET_VOLTAGE:
-      set_voltage(vt,&msg);
-      break;
-    
     case MSG_PIDLIST:
       set_pidlist(vt,&msg);
       return;
       break;
-      
-    case MSG_SEND_DISEQC_BURST:
-      DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_BURST\n");
-      if ( msg.body.burst == SEC_MINI_A )
-	satip_set_position(vt->satip_cfg,1);
-      else if ( msg.body.burst == SEC_MINI_B )
-	satip_set_position(vt->satip_cfg,2);
-      else
-	ERROR(MSG_MAIN,"invalid diseqc burst %d\n",msg.body.burst);
-      break;
 
-    case MSG_SEND_DISEQC_MSG:
-      diseqc_msg(vt, &msg);
-      break;
-      
     default:
       break;
     }
-  
+
   msg.type=0;
 
-  if (ioctl(vt->fd, VTUNER_SET_RESPONSE, &msg)){ 
+  if (ioctl(vt->fd, VTUNER_SET_RESPONSE, &msg)){
     ERROR(MSG_MAIN,"ioctl: response not ok\n");
     return;
   }
