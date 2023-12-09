@@ -28,8 +28,6 @@
  #error Version 5.5 or newer of DVB API is required (see at linux/dvb/version.h)
  #error You can find it in kernel version >= 3.3.0
  #error ========================================================================
-#else
- #define HAS_DELSYS
 #endif
 
 struct dvb_proxyfe_state {
@@ -147,9 +145,9 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	msg.body.fe_params.frequency = c->frequency;
 	msg.body.fe_params.inversion = c->inversion;
 
-	switch (ctx->vtype) {
-	case VT_S:
-	case VT_S2:
+	switch (c->delivery_system) {
+	case SYS_DVBS:
+	case SYS_DVBS2:
 		msg.body.fe_params.u.qpsk.symbol_rate = c->symbol_rate;
 		msg.body.fe_params.u.qpsk.fec_inner = c->fec_inner;
 		msg.body.fe_params.u.qpsk.modulation = c->modulation;
@@ -157,7 +155,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.body.fe_params.u.qpsk.rolloff = c->rolloff;
 		memcpy(&msg.body.fe_params.u.qpsk.sat, &ctx->fe_params.u.qpsk.sat, sizeof(struct sat_params));
 		break;
-	case VT_T:
+	case SYS_DVBT:
 		msg.body.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
 		msg.body.fe_params.u.ofdm.code_rate_HP = c->code_rate_HP;
 		msg.body.fe_params.u.ofdm.code_rate_LP = c->code_rate_LP;
@@ -166,19 +164,17 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.body.fe_params.u.ofdm.guard_interval = c->guard_interval;
 		msg.body.fe_params.u.ofdm.hierarchy_information = c->hierarchy;
 		break;
-	case VT_C:
+	case SYS_DVBC_ANNEX_A:
 		msg.body.fe_params.u.qam.symbol_rate = c->symbol_rate;
 		msg.body.fe_params.u.qam.fec_inner = c->fec_inner;
 		msg.body.fe_params.u.qam.modulation = c->modulation;
 		break;
 	default:
-		printk(KERN_ERR "vtunerc%d: unregognized tuner vtype = %d\n", ctx->idx, ctx->vtype);
+		printk(KERN_ERR "vtunerc%d: unregognized tuner type = %d\n", ctx->idx, c->delivery_system);
 		return -EINVAL;
 	}
 
 	if (memcmp(&msg.body.fe_params, &ctx->fe_params, sizeof(struct fe_params))==0) return 0; // no change
-
-	printk(KERN_NOTICE "vtunerc%d: sending MSG_SET_FRONTEND freq=%i\n", ctx->idx, c->frequency);
 
 	ctx->stat_time = ktime_get_seconds();
 	ctx->signal.status = FE_NONE;
@@ -248,13 +244,12 @@ static int dvb_proxyfe_send_diseqc_burst(struct dvb_frontend *fe, enum fe_sec_mi
 static void dvb_proxyfe_release(struct dvb_frontend *fe)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-
 	kfree(state);
 }
 
-static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops;
+static struct dvb_frontend_ops dvb_proxyfe_ops;
 
-static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *ctx)
+static struct dvb_frontend *dvb_proxyfe_attach(struct vtunerc_ctx *ctx)
 {
 	struct dvb_frontend *fe = ctx->fe;
 
@@ -269,132 +264,30 @@ static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *ctx)
 
 		fe = &state->frontend;
 		fe->demodulator_priv = state;
+		fe->id = 0;
 		state->ctx = ctx;
 	}
 
-	memcpy(&fe->ops, &dvb_proxyfe_ofdm_ops, sizeof(struct dvb_frontend_ops));
+	memcpy(&fe->ops, &dvb_proxyfe_ops, sizeof(struct dvb_frontend_ops));
 
 	return fe;
 }
 
-static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops;
-
-static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *ctx, int can_2g_modulation)
-{
-	struct dvb_frontend *fe = ctx->fe;
-
-	if (!fe) {
-		struct dvb_proxyfe_state *state = NULL;
-
-		/* allocate memory for the internal state */
-		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
-		if (state == NULL) {
-			return NULL;
-		}
-
-		fe = &state->frontend;
-		fe->demodulator_priv = state;
-		state->ctx = ctx;
-	}
-
-	memcpy(&fe->ops, &dvb_proxyfe_qpsk_ops, sizeof(struct dvb_frontend_ops));
-	if (can_2g_modulation) {
-		fe->ops.info.caps |= FE_CAN_2G_MODULATION;
-		fe->ops.delsys[1] = SYS_DVBS2;
-		strcpy(fe->ops.info.name, "vTuner proxyFE DVB-S2");
-	}
-
-	return fe;
-}
-
-static struct dvb_frontend_ops dvb_proxyfe_qam_ops;
-
-static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *ctx)
-{
-	struct dvb_frontend *fe = ctx->fe;
-
-	if (!fe) {
-		struct dvb_proxyfe_state *state = NULL;
-
-		/* allocate memory for the internal state */
-		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
-		if (state == NULL) {
-			return NULL;
-		}
-
-		fe = &state->frontend;
-		fe->demodulator_priv = state;
-		state->ctx = ctx;
-	}
-
-	memcpy(&fe->ops, &dvb_proxyfe_qam_ops, sizeof(struct dvb_frontend_ops));
-
-	return fe;
-}
-
-static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
-        .delsys = { SYS_DVBT },
+static struct dvb_frontend_ops dvb_proxyfe_ops = {
+        .delsys = { SYS_DVBT, SYS_DVBC_ANNEX_A, SYS_DVBS, SYS_DVBS2 },
 	.info = {
-		.name			= "vTuner proxyFE DVB-T",
+		.name			= "vTuner proxyFE DVB-Multi",
 		.frequency_min_hz	= 51 * MHz,
-		.frequency_max_hz	= 863250 * kHz,
-		.frequency_stepsize_hz	= 62500,
-		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 | FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 |
-			FE_CAN_FEC_8_9 | FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_64 | FE_CAN_QAM_AUTO | FE_CAN_TRANSMISSION_MODE_AUTO |
-			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO,
-	},
-
-	.release = dvb_proxyfe_release,
-
-	.init = dvb_proxyfe_init,
-	.sleep = dvb_proxyfe_sleep,
-
-	.set_frontend = dvb_proxyfe_set_frontend,
-	.read_status = dvb_proxyfe_read_status,
-	.read_ber = dvb_proxyfe_read_ber,
-	.read_signal_strength = dvb_proxyfe_read_signal_strength,
-	.read_snr = dvb_proxyfe_read_snr,
-	.read_ucblocks = dvb_proxyfe_read_ucblocks,
-};
-
-static struct dvb_frontend_ops dvb_proxyfe_qam_ops = {
-        .delsys = { SYS_DVBC_ANNEX_A },
-	.info = {
-		.name			= "vTuner proxyFE DVB-C",
-		.frequency_stepsize_hz	= 62500,
-		.frequency_min_hz	= 51 * MHz,
-		.frequency_max_hz	= 858 * MHz,
-		.symbol_rate_min	= (57840000/2)/64,     /* SACLK/64 == (XIN/2)/64 */
-		.symbol_rate_max	= (57840000/2)/4,      /* SACLK/4 */
-		.caps = FE_CAN_QAM_16 | FE_CAN_QAM_32 | FE_CAN_QAM_64 | FE_CAN_QAM_128 | FE_CAN_QAM_256 | FE_CAN_FEC_AUTO | FE_CAN_INVERSION_AUTO
-	},
-
-	.release = dvb_proxyfe_release,
-
-	.init = dvb_proxyfe_init,
-	.sleep = dvb_proxyfe_sleep,
-
-	.set_frontend = dvb_proxyfe_set_frontend,
-
-	.read_status = dvb_proxyfe_read_status,
-	.read_ber = dvb_proxyfe_read_ber,
-	.read_signal_strength = dvb_proxyfe_read_signal_strength,
-	.read_snr = dvb_proxyfe_read_snr,
-	.read_ucblocks = dvb_proxyfe_read_ucblocks,
-};
-
-static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
-        .delsys = { SYS_DVBS },
-	.info = {
-		.name			= "vTuner proxyFE DVB-S",
-		.frequency_min_hz	= 950 * MHz,
 		.frequency_max_hz	= 2150 * MHz,
-		.frequency_stepsize_hz	= 250 * kHz,           /* kHz for QPSK frontends */
+		.frequency_stepsize_hz	= 62.5 * kHz,
 		.frequency_tolerance_hz	= 29500 * kHz,
-		.symbol_rate_min	= 1000000,
+		.symbol_rate_min	= 450000,
 		.symbol_rate_max	= 45000000,
 		.caps = FE_CAN_INVERSION_AUTO | FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |
-			FE_CAN_FEC_5_6 | FE_CAN_FEC_7_8 | FE_CAN_FEC_8_9 | FE_CAN_QPSK | FE_CAN_RECOVER
+			FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 | FE_CAN_FEC_8_9 | FE_CAN_QPSK | FE_CAN_RECOVER |
+			FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_64 | FE_CAN_QAM_AUTO | FE_CAN_TRANSMISSION_MODE_AUTO |
+			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO | FE_CAN_QAM_128 | FE_CAN_QAM_256 | FE_CAN_FEC_AUTO |
+			FE_CAN_INVERSION_AUTO | FE_CAN_2G_MODULATION
 	},
 
 	.release = dvb_proxyfe_release,
@@ -417,44 +310,17 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 
 	.diseqc_send_master_cmd = dvb_proxyfe_send_diseqc_msg,
 	.diseqc_send_burst = dvb_proxyfe_send_diseqc_burst,
-
 };
 
-int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype)
+int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx)
 {
-	int ret = 0;
-
-	if (ctx->fe && vtype == ctx->vtype) {
-		printk(KERN_NOTICE "vtunerc%d: frontend already initialized as type=%d\n", ctx->idx, ctx->vtype);
+	if (ctx->fe) {
+		printk(KERN_NOTICE "vtunerc%d: frontend already initialized\n", ctx->idx);
 		return 0;
 	}
 
-	switch (vtype) {
-	case VT_S:
-		ctx->fe = dvb_proxyfe_qpsk_attach(ctx, 0);
-		break;
-	case VT_S2:
-		ctx->fe = dvb_proxyfe_qpsk_attach(ctx, 1);
-		break;
-	case VT_T:
-		ctx->fe = dvb_proxyfe_ofdm_attach(ctx);
-		break;
-	case VT_C:
-		ctx->fe = dvb_proxyfe_qam_attach(ctx);
-		break;
-	default:
-		printk(KERN_ERR "vtunerc%d: unregognized tuner vtype = %d\n", ctx->idx, ctx->vtype);
-		return -EINVAL;
-	}
-
-	ctx->fe->id = 0;
-
-	if(ctx->vtype == VT_NULL) // means: was frontend not registered yet?
-		ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
-
-	ctx->vtype = vtype;
-
-	return ret;
+	ctx->fe = dvb_proxyfe_attach(ctx);
+	return dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
 }
 
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx)

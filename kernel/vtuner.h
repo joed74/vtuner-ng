@@ -21,12 +21,6 @@
 #include <linux/dvb/frontend.h>
 #include <linux/dvb/dmx.h>
 
-#define VT_NULL	0
-#define VT_S	5
-#define VT_S2	6
-#define VT_C	19
-#define VT_T	16
-
 #define MSG_SET_FRONTEND		10
 #define MSG_PIDLIST			20
 
@@ -115,7 +109,6 @@ struct vtuner_signal
 #define VTUNER_GET_MESSAGE	_IOR(VTUNER_MAJOR, 1, struct vtuner_message *)
 #define VTUNER_SET_RESPONSE 	_IOW(VTUNER_MAJOR, 2, struct vtuner_message *)
 #define VTUNER_SET_SIGNAL	_IOW(VTUNER_MAJOR, 3, struct vtuner_signal *)
-#define VTUNER_SET_TYPE		_IOW(VTUNER_MAJOR, 4, char *)
 
 #endif
 

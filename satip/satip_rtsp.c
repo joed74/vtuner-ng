@@ -43,6 +43,7 @@ typedef enum {
   RTSP_ESTABLISHING,  /* try to get stream ID */
   RTSP_READY,         /* connected with stream ID and no request pending */
   RTSP_WAITING,       /* waiting for response */
+  RTSP_ABORTING,
 } t_rtsp_state;
 
 
@@ -188,7 +189,7 @@ static void restart_connection(t_satip_rtsp* rtsp,int now)
   
   if ( now )
     {
-      satip_rtsp_check_update(rtsp);
+      satip_rtsp_check_update(rtsp, 0);
     }
   else
     {
@@ -315,6 +316,7 @@ static int send_options(t_satip_rtsp* rtsp)
 
 static int send_teardown(t_satip_rtsp* rtsp)
 {
+  if (rtsp->streamid==0) return SATIP_RTSP_OK;
   int printed;
 
   printed =
@@ -561,7 +563,6 @@ static void timeout_keep_alive(void* param)
 
 void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 {
-
   if ( events & POLLHUP ) 
     {
       /* connection rejected (port closed) */
@@ -627,7 +628,7 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 
 	      rtsp->request=RTSP_REQ_NONE;
 
-	      satip_rtsp_check_update(rtsp);
+	      satip_rtsp_check_update(rtsp, 0);
 	      
 	      if ( rtsp->request == RTSP_REQ_NONE )
 
@@ -679,11 +680,9 @@ short satip_rtsp_pollflags(t_satip_rtsp* rtsp)
 
 
 
-
-
-
-void  satip_rtsp_check_update(struct satip_rtsp*  rtsp)
+void  satip_rtsp_check_update(struct satip_rtsp*  rtsp, int abort)
 {
+  if (abort) rtsp->status = RTSP_ABORTING;
   switch ( rtsp->status ) 
     {
     case RTSP_NOCONFIG:
@@ -713,6 +712,10 @@ void  satip_rtsp_check_update(struct satip_rtsp*  rtsp)
 //	  else if ( !satip_valid_config(rtsp->satip_config) )
 //	    send_request(rtsp, RTSP_READY, RTSP_REQ_TEARDOWN, send_teardown);
 	}
+      break;
+
+    case RTSP_ABORTING:
+      send_request(rtsp, RTSP_READY, RTSP_REQ_TEARDOWN, send_teardown);
       break;
 
     case RTSP_CONNECTING:

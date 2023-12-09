@@ -89,6 +89,8 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 	}
 
+	if (ctx->kernel_buf[0]==0x47) ctx->signal.status=FE_HAS_LOCK;
+
 	ctx->stat_wr_data += len;
 	dvb_dmx_swfilter_packets(demux, ctx->kernel_buf, len / 188);
 
@@ -114,12 +116,14 @@ static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buff, size_t
 
 	if (len > ctx->kernel_buf_size) len = ctx->kernel_buf_size;
 
-	if (copy_to_user(buff, ctx->kernel_buf, len))
+	if (copy_to_user(buff, ctx->kernel_buf, len)) {
+		up(&ctx->tswrite_sem);
 		return -EINVAL;
+	}
 
 	return len;
-*/
-	return -EINVAL;
+	*/
+	return 0;
 }
 
 static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
@@ -142,18 +146,11 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	int i, minor;
-	struct vtuner_message fakemsg;
+	//struct vtuner_message fakemsg;
 
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
 	ctx->fd_opened--;
-	if (ctx->fd_opened == 0) {
-		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
-		memset(&ctx->fe_params,0,sizeof(struct fe_params));
-		memset(&ctx->pidtab,0,sizeof(unsigned short)*MAX_PIDTAB_LEN);
-		for (i = 0; i < MAX_PIDTAB_LEN; i++)
-			ctx->pidtab[i] = PID_UNKNOWN;
-	}
 	ctx->closing = 1;
 
 	minor = MINOR(inode->i_rdev);
@@ -164,14 +161,15 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	dprintk(ctx, "faked response\n");
 	wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
 
-	/* clear pidtab */
-	dprintk(ctx, "sending pidtab cleared ...\n");
-	if (down_interruptible(&ctx->xchange_sem))
-		return -ERESTARTSYS;
-	memset(&fakemsg, 0, sizeof(fakemsg));
-	vtunerc_ctrldev_xchange_message(ctx, &fakemsg, 0);
-	up(&ctx->xchange_sem);
-	dprintk(ctx, "pidtab clearing done\n");
+	if (ctx->fd_opened == 0) {
+		ctx->stat_time = 0;
+		ctx->stat_wr_data = 0;
+		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
+		memset(&ctx->fe_params,0,sizeof(struct fe_params));
+		memset(&ctx->pidtab,0,sizeof(unsigned short)*MAX_PIDTAB_LEN);
+		for (i = 0; i < MAX_PIDTAB_LEN; i++)
+			ctx->pidtab[i] = PID_UNKNOWN;
+	}
 
 	return 0;
 }
@@ -179,7 +177,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct vtunerc_ctx *ctx = file->private_data;
-	int len, vtype, ret = 0;
+	int ret = 0;
 
 	if (ctx->closing)
 		return -EINTR;
@@ -188,45 +186,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		return -ERESTARTSYS;
 
 	switch (cmd) {
-	case VTUNER_SET_TYPE:
-		len = sizeof((char *)arg);
-		ctx->fe_type = kmalloc(len, GFP_KERNEL);
-		if (ctx->fe_type == NULL) {
-			printk(KERN_ERR "vtunerc%d: no memory\n", ctx->idx);
-			ret = -ENOMEM;
-			break;
-		}
-		if (copy_from_user(ctx->fe_type, (char *)arg, len)) {
-			kfree(ctx->fe_type);
-			ret = -EFAULT;
-			break;
-		}
-		if (strcasecmp(ctx->fe_type, "DVB-S") == 0) {
-			vtype = VT_S;
-			printk(KERN_NOTICE "vtunerc%d: setting DVB-S tuner vtype\n", ctx->idx);
-		} else if (strcasecmp(ctx->fe_type, "DVB-S2") == 0) {
-			vtype = VT_S2;
-			printk(KERN_NOTICE "vtunerc%d: setting DVB-S2 tuner vtype\n", ctx->idx);
-		} else if (strcasecmp(ctx->fe_type, "DVB-T") == 0) {
-			vtype = VT_T;
-			printk(KERN_NOTICE "vtunerc%d: setting DVB-T tuner vtype\n", ctx->idx);
-		} else if (strcasecmp(ctx->fe_type, "DVB-C") == 0) {
-			vtype = VT_C;
-			printk(KERN_NOTICE "vtunerc%d: setting DVB-C tuner vtype\n", ctx->idx);
-		} else {
-			printk(KERN_ERR "vtunerc%d: unregognized tuner vtype '%s'\n", ctx->idx, ctx->fe_type);
-			ret = -ENODEV;
-			break;
-		}
-
-		if ((vtunerc_frontend_init(ctx, vtype))) {
-			ctx->vtype = 0;
-			printk(KERN_ERR "vtunerc%d: failed to initialize tuner's internals\n", ctx->idx);
-			ret = -ENODEV;
-			break;
-		}
-		break;
-
 	case VTUNER_SET_SIGNAL:
 		printk(KERN_INFO "vtunerc%d: set signal\n", ctx->idx);
 		if (copy_from_user(&ctx->signal, (char *)arg, VTUNER_SIG_LEN)) {
@@ -366,7 +325,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 		up(&ctx->xchange_sem);
 		return 0;
 	}
-	if (msg->type >= MSG_SET_FRONTEND) dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
+	dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
 
 #if 0
 	BUG_ON(ctx->ctrldev_request.type != -1);
@@ -393,7 +352,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 
 	BUG_ON(ctx->ctrldev_response.type == -1);
 
-	if (msg->type >= MSG_SET_FRONTEND) dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
+	dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
 	memcpy(msg, &ctx->ctrldev_response, sizeof(struct vtuner_message));
 	ctx->ctrldev_response.type = -1;
 

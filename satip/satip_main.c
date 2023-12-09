@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sched.h>
+#include <signal.h>
 
 #include "satip_config.h"
 #include "satip_vtuner.h"
@@ -38,7 +39,7 @@
 int dbg_level = MSG_ERROR;
 unsigned int dbg_mask = MSG_MAIN | MSG_NET | MSG_HW | MSG_SRV; // MSG_DATA
 int use_syslog = 0;
-
+int abort_all = 0;
 
 #ifdef TEST_SEQUENCER
 
@@ -100,6 +101,11 @@ static void enable_rt_scheduling()
 }
 
 
+void hangup(int sig)
+{
+   abort_all=1;
+}
+
 int main(int argc, char** argv)
 {
   char* host = NULL;
@@ -118,7 +124,8 @@ int main(int argc, char** argv)
 
   int opt;
 
-  //fprintf(stderr, "msg size=%lu\n", sizeof(struct vtuner_message));
+  signal(SIGHUP, hangup);
+  signal(SIGINT, hangup);
 
   while((opt = getopt(argc, argv, "h:p:d:f:m:l:")) != -1 ) {
     switch(opt) 
@@ -205,8 +212,9 @@ int main(int argc, char** argv)
   while (1)
     {
       /* apply any updates on rtsp  */
-      satip_rtsp_check_update(srtsp);
-      
+      satip_rtsp_check_update(srtsp, abort_all);
+      if (abort_all) exit(0);
+
       /* vt control events */
       pollfds[0].revents = 0;
       
@@ -232,8 +240,8 @@ int main(int argc, char** argv)
 	satip_vtuner_event(satvt);
 
       /* rtsp event handling */
-      if ( pollfds[poll_idx].revents !=0 )
-	satip_rtsp_pollevents(srtsp, pollfds[poll_idx].revents);      
+      if ( pollfds[poll_idx].revents !=0 ) 
+	satip_rtsp_pollevents(srtsp, pollfds[poll_idx].revents);  
     }
   
   return 0;

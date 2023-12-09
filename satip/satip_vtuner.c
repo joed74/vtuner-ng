@@ -69,8 +69,6 @@ t_satip_vtuner* satip_vtuner_new(char* devname,t_satip_config* satip_cfg)
       return NULL;
     }
 
-  if (ioctl(fd, VTUNER_SET_TYPE, "DVB-S2")) return NULL;
-
   vt=(t_satip_vtuner*)malloc(sizeof(t_satip_vtuner));
 
   vt->fd=fd;

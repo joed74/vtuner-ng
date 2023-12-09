@@ -361,7 +361,6 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
 
 	seq_printf(seq, "[ vtunerc driver, version " VTUNERC_MODULE_VERSION " ]\n");
-	seq_printf(seq, "  FE type     : %i\n", ctx->vtype);
 	seq_printf(seq, "  Used by     : %u\n", ctx->fd_opened);
 	status2str(seq, ctx->signal.status);
 	if (ctx->stat_time>0)
@@ -370,7 +369,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 		struct fe_params *fep = &ctx->fe_params;
 		if (fep->frequency>0) {
 			delsys2str(seq, fep->delivery_system);
-			if (fep->delivery_system==VT_S || fep->delivery_system==VT_S2) {
+			if (fep->delivery_system==SYS_DVBS || fep->delivery_system==SYS_DVBS2) {
 				mod2str(seq, fep->u.qpsk.modulation);
 				satfreq2str(seq, fep->frequency, fep->u.qpsk.sat.tone);
 				seq_printf(seq, "  Symbolrate  : %i\n", fep->u.qpsk.symbol_rate / 1000);
@@ -524,6 +523,8 @@ static int __init vtunerc_init(void)
 		ret = dmx->connect_frontend(dmx, &ctx->hw_frontend);
 		if (ret < 0)
 			goto err_remove_mem_frontend;
+
+		vtunerc_frontend_init(ctx);
 
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);

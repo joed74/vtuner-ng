@@ -39,7 +39,7 @@ struct satip_rtsp* satip_rtsp_new(t_satip_config* satip_config,
 int   satip_rtsp_socket(struct satip_rtsp* rtsp);
 void  satip_rtsp_pollevents(struct satip_rtsp* rtsp, short events);
 short satip_rtsp_pollflags(struct satip_rtsp* rtsp);
-void  satip_rtsp_check_update(struct satip_rtsp*  rtsp);
+void  satip_rtsp_check_update(struct satip_rtsp*  rtsp, int abort);
 
 #endif
 

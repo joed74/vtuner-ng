@@ -54,8 +54,8 @@ static void set_status(int fd, unsigned char status, unsigned short ss, unsigned
 {
 	struct vtuner_signal sig;
 	sig.status = status;
-	sig.ss = ss;
-	sig.ber = ber;
+	sig.ss = ss*255;
+	sig.ber = ber*255;
 	sig.snr = 0;
 	sig.ucb = 0;
 	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
@@ -73,6 +73,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
   unsigned int ber;
   unsigned short ss;
   unsigned char status;
+  int freq;
 
   int update_status=0;
 
@@ -123,6 +124,12 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 				int act_ber=atoi(token);
 				if (act_ber!=ber) update_status=1;
 				ber=act_ber;
+			}
+			if (nr==4) {
+				// frequency
+				int act_freq=atoi(token);
+				if (act_freq!=freq) update_status=1;
+				freq=act_freq;
 			}
 			nr++;
 		  }
@@ -192,7 +199,6 @@ static void* rtp_receiver(void* param)
 	  if ( rx>12 && rxbuf[12] == 0x47 )
 	    {
       		wr = write(srtp->fd,&rxbuf[12],rx-12);
-//		set_status(srtp->fd, FE_HAS_LOCK, 65535, 15);
 		DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
 	    }
 	    else
