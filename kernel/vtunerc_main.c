@@ -475,6 +475,7 @@ static int __init vtunerc_init(void)
 		ctx->ctrldev_response.type = -1;
 		init_waitqueue_head(&ctx->ctrldev_wait_request_wq);
 		init_waitqueue_head(&ctx->ctrldev_wait_response_wq);
+		init_waitqueue_head(&ctx->ctrldev_wait_packet_wq);
 
 		// buffer
 		ctx->kernel_buf = NULL;
@@ -529,6 +530,7 @@ static int __init vtunerc_init(void)
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
 		sema_init(&ctx->tswrite_sem, 1);
+		sema_init(&ctx->tsread_sem, 1);
 
 		/* init pid table */
 		for (i = 0; i < MAX_PIDTAB_LEN; i++)

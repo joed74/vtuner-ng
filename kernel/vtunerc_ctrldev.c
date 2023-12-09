@@ -36,9 +36,6 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct dvb_demux *demux = &ctx->demux;
 	int tailsize = len % 188;
 
-	if (ctx->closing)
-		return -EINTR;
-
 	if (len < 188) {
 		printk(KERN_ERR "vtunerc%d: Data are shorter then TS packet size (188B)\n",
 				ctx->idx);
@@ -94,6 +91,9 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	ctx->stat_wr_data += len;
 	dvb_dmx_swfilter_packets(demux, ctx->kernel_buf, len / 188);
 
+	ctx->nextpacket = 1;
+	wake_up_interruptible(&ctx->ctrldev_wait_packet_wq);
+
 	up(&ctx->tswrite_sem);
 
 #ifdef CONFIG_PROC_FS
@@ -105,25 +105,31 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 
 static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buff, size_t len, loff_t *off)
 {
-/*
 	struct vtunerc_ctx *ctx = filp->private_data;
+	ssize_t ret = 0;
 
-	if (ctx->closing)
-		return -EINTR;
-
-	if (!ctx->kernel_buf)
+	if (!ctx->kernel_buf || ctx->kernel_buf_size==0 || len < ctx->kernel_buf_size)
 		return -EINVAL;
 
-	if (len > ctx->kernel_buf_size) len = ctx->kernel_buf_size;
+	if (down_interruptible(&ctx->tsread_sem))
+		return -ERESTARTSYS;
 
-	if (copy_to_user(buff, ctx->kernel_buf, len)) {
-		up(&ctx->tswrite_sem);
-		return -EINVAL;
+	if (wait_event_interruptible(ctx->ctrldev_wait_packet_wq, ctx->nextpacket != 0))
+	{
+		up(&ctx->tsread_sem);
+		return -ERESTARTSYS;
 	}
 
-	return len;
-	*/
-	return 0;
+	if (ctx->nextpacket==1) {
+		if (copy_to_user(buff, ctx->kernel_buf, ctx->kernel_buf_size)) {
+			up(&ctx->tsread_sem);
+			return -EINVAL;
+		}
+		ret = ctx->kernel_buf_size;
+	}
+	ctx->nextpacket = 0;
+	up(&ctx->tsread_sem);
+	return ret;
 }
 
 static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
@@ -137,8 +143,6 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 
 	ctx->fd_opened++;
-	ctx->closing = 0;
-
 	return 0;
 }
 
@@ -151,7 +155,6 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
 	ctx->fd_opened--;
-	ctx->closing = 1;
 
 	minor = MINOR(inode->i_rdev);
 
@@ -160,6 +163,9 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	ctx->ctrldev_response.type = 0;
 	dprintk(ctx, "faked response\n");
 	wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
+
+	ctx->nextpacket=-1;
+	wake_up_interruptible(&ctx->ctrldev_wait_packet_wq);
 
 	if (ctx->fd_opened == 0) {
 		ctx->stat_time = 0;
@@ -170,7 +176,6 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		for (i = 0; i < MAX_PIDTAB_LEN; i++)
 			ctx->pidtab[i] = PID_UNKNOWN;
 	}
-
 	return 0;
 }
 
@@ -178,9 +183,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 {
 	struct vtunerc_ctx *ctx = file->private_data;
 	int ret = 0;
-
-	if (ctx->closing)
-		return -EINTR;
 
 	if (down_interruptible(&ctx->ioctl_sem))
 		return -ERESTARTSYS;
@@ -233,9 +235,6 @@ static unsigned int vtunerc_ctrldev_poll(struct file *filp, poll_table *wait)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	unsigned int mask = 0;
-
-	if (ctx->closing)
-		return -EINTR;
 
 	poll_wait(filp, &ctx->ctrldev_wait_request_wq, wait);
 
@@ -340,8 +339,11 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 	ctx->noresponse = !wait4response;
 	wake_up_interruptible(&ctx->ctrldev_wait_request_wq);
 
-	if (!wait4response)
+	if (!wait4response) {
+		dprintk(ctx, "XCH_MSG: %d (DONE)\n", msg->type);
+		// no up here, results in orphan requests!
 		return 0;
+	}
 
 	if (wait_event_interruptible(ctx->ctrldev_wait_response_wq, ctx->ctrldev_response.type != -1)) {
 		dprintk(ctx, "XCH_MSG: %d: wait_event interrupted\n", msg->type);

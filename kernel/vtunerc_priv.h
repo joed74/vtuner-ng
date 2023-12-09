@@ -70,8 +70,8 @@ struct vtunerc_ctx {
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;
 	struct semaphore tswrite_sem;
+	struct semaphore tsread_sem;
 	int fd_opened;
-	int closing;
 
 	char *procname;
 
@@ -84,6 +84,8 @@ struct vtunerc_ctx {
 	struct vtuner_message ctrldev_response;
 	wait_queue_head_t ctrldev_wait_request_wq;
 	wait_queue_head_t ctrldev_wait_response_wq;
+	int nextpacket;
+	wait_queue_head_t ctrldev_wait_packet_wq;
 
 	/* proc statistics */
 	unsigned int stat_wr_data;
