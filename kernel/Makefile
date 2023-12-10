@@ -2,7 +2,7 @@
 # Makefile for the vtunerc device driver
 #
 
-VTUNERC_MAX_ADAPTERS ?= 4
+VTUNERC_MAX_ADAPTERS ?= 8
 
 vtunerc-objs = vtunerc_main.o vtunerc_ctrldev.o vtunerc_proxyfe.o
 

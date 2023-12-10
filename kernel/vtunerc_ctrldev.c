@@ -35,6 +35,9 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct vtunerc_ctx *ctx = filp->private_data;
 	struct dvb_demux *demux = &ctx->demux;
 	int tailsize = len % 188;
+	unsigned short pid;
+	int i, idx, cc;
+	bool sendfiller;
 
 	if (len < 188) {
 		printk(KERN_ERR "vtunerc%d: Data are shorter then TS packet size (188B)\n",
@@ -67,29 +70,53 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	}
 
 	if (copy_from_user(ctx->kernel_buf, buff, len)) {
-		printk(KERN_ERR "vtunerc%d: userdata passing error\n",
-				ctx->idx);
+		printk(KERN_ERR "vtunerc%d: userdata passing error\n", ctx->idx);
 		up(&ctx->tswrite_sem);
 		return -EINVAL;
 	}
 
-	if (ctx->config->tscheck) {
-		int i;
+	for (i = 0; i < len; i += 188) {
+		if (ctx->kernel_buf[i] != 0x47) { /* start of TS packet */
+			printk(KERN_ERR "vtunerc%d: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",
+					ctx->idx, i / 188, ctx->kernel_buf[i], ctx->kernel_buf[i + 1],
+					ctx->kernel_buf[i + 2], ctx->kernel_buf[i + 3], ctx->kernel_buf[i + 4]);
+			up(&ctx->tswrite_sem);
+			return -EINVAL;
+		}
 
-		for (i = 0; i < len; i += 188)
-			if (ctx->kernel_buf[i] != 0x47) { /* start of TS packet */
-				printk(KERN_ERR "vtunerc%d: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",
-						ctx->idx, i / 188, ctx->kernel_buf[i], ctx->kernel_buf[i + 1],
-						ctx->kernel_buf[i + 2], ctx->kernel_buf[i + 3], ctx->kernel_buf[i + 4]);
-				up(&ctx->tswrite_sem);
-				return -EINVAL;
+		sendfiller=1;
+		pid = ((ctx->kernel_buf[i+1] & 0x1f)<<8)|ctx->kernel_buf[i+2];
+		idx = pidtab_find_index(ctx->pidtab, pid);
+		if (idx!=-1) {
+			if (ctx->kernel_buf[i+1] & 0x40 && ctx->pusitab[idx]==0) {
+				cc = ctx->kernel_buf[i+3] & 0x0f;
+				dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
+				cc = cc - 1;
+				if (cc == -1) cc = 15;
+				ctx->pusitab[idx]=1;
+				ctx->feedtab[idx]->cc = cc;
 			}
+			if (ctx->pusitab[idx]==1) sendfiller=0;
+		} else {
+			if (pid!=0x1fff) dprintk(ctx, "pid %i not found in pidtab\n", pid);
+		}
+
+		if (sendfiller) {
+			ctx->kernel_buf[i+1]=0x1F; // pid 0x1FFF
+			ctx->kernel_buf[i+2]=0xFF;
+			ctx->kernel_buf[i+3]=0x20; // only adaption
+			ctx->kernel_buf[i+4]=0xB7; // adaption field length (whole packet)
+			ctx->kernel_buf[i+5]=0x00; // adaption fileds (none)
+			memset(&ctx->kernel_buf[i+6],0xff,182);
+		}
+
+		dvb_dmx_swfilter_packets(demux, &ctx->kernel_buf[i], 1);
 	}
 
-	if (ctx->kernel_buf[0]==0x47) ctx->signal.status=FE_HAS_LOCK;
+	// we habe a TS packet, so we habe a lock!
+	if (ctx->kernel_buf[0]==0x47) ctx->signal.status = FE_HAS_LOCK;
 
 	ctx->stat_wr_data += len;
-	dvb_dmx_swfilter_packets(demux, ctx->kernel_buf, len / 188);
 
 	ctx->nextpacket = 1;
 	wake_up_interruptible(&ctx->ctrldev_wait_packet_wq);
@@ -108,27 +135,21 @@ static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buff, size_t
 	struct vtunerc_ctx *ctx = filp->private_data;
 	ssize_t ret = 0;
 
-	if (!ctx->kernel_buf || ctx->kernel_buf_size==0 || len < ctx->kernel_buf_size)
-		return -EINVAL;
-
-	if (down_interruptible(&ctx->tsread_sem))
-		return -ERESTARTSYS;
-
 	if (wait_event_interruptible(ctx->ctrldev_wait_packet_wq, ctx->nextpacket != 0))
 	{
-		up(&ctx->tsread_sem);
 		return -ERESTARTSYS;
 	}
 
-	if (ctx->nextpacket==1) {
+	if (ctx->nextpacket>0) {
+		if (len < ctx->kernel_buf_size) {
+			return -EINVAL;
+		}
 		if (copy_to_user(buff, ctx->kernel_buf, ctx->kernel_buf_size)) {
-			up(&ctx->tsread_sem);
 			return -EINVAL;
 		}
 		ret = ctx->kernel_buf_size;
 	}
 	ctx->nextpacket = 0;
-	up(&ctx->tsread_sem);
 	return ret;
 }
 
@@ -150,7 +171,6 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	int i, minor;
-	//struct vtuner_message fakemsg;
 
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
@@ -164,14 +184,12 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	dprintk(ctx, "faked response\n");
 	wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
 
-	ctx->nextpacket=-1;
-	wake_up_interruptible(&ctx->ctrldev_wait_packet_wq);
-
 	if (ctx->fd_opened == 0) {
 		ctx->stat_time = 0;
 		ctx->stat_wr_data = 0;
 		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
 		memset(&ctx->fe_params,0,sizeof(struct fe_params));
+		memset(&ctx->pusitab,0,sizeof(unsigned char)*MAX_PIDTAB_LEN);
 		memset(&ctx->pidtab,0,sizeof(unsigned short)*MAX_PIDTAB_LEN);
 		for (i = 0; i < MAX_PIDTAB_LEN; i++)
 			ctx->pidtab[i] = PID_UNKNOWN;
@@ -189,7 +207,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 
 	switch (cmd) {
 	case VTUNER_SET_SIGNAL:
-		printk(KERN_INFO "vtunerc%d: set signal\n", ctx->idx);
+		dprintk(ctx, "set signal\n");
 		if (copy_from_user(&ctx->signal, (char *)arg, VTUNER_SIG_LEN)) {
 			ret = -EFAULT;
 		}

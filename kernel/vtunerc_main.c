@@ -41,7 +41,7 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 #define VTUNERC_PROC_FILENAME	"vtunerc%i"
 
 #ifndef VTUNERC_MAX_ADAPTERS
-#define VTUNERC_MAX_ADAPTERS	4
+#define VTUNERC_MAX_ADAPTERS	8
 #endif
 
 static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
@@ -49,11 +49,10 @@ static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 /* module params */
 static struct vtunerc_config config = {
 	.devices = 1,
-	.tscheck = 0,
 	.debug = 0
 };
 
-static int pidtab_find_index(unsigned short *pidtab, int pid)
+int pidtab_find_index(unsigned short *pidtab, int pid)
 {
 	int i = 0;
 
@@ -66,23 +65,27 @@ static int pidtab_find_index(unsigned short *pidtab, int pid)
 	return -1;
 }
 
-static int pidtab_add_pid(unsigned short *pidtab, int pid)
+static int pidtab_add_pid(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
 {
 	int i;
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-		if (pidtab[i] == PID_UNKNOWN) {
-			pidtab[i] = pid;
+		if (ctx->pidtab[i] == PID_UNKNOWN) {
+			ctx->pidtab[i] = feed->pid;
+			ctx->pusitab[i] = 0;
+			ctx->feedtab[i] = feed;
 			return 0;
 		}
 	return -1;
 }
 
-static int pidtab_del_pid(unsigned short *pidtab, int pid)
+static int pidtab_del_pid(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
 {
 	int i;
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-		if (pidtab[i] == pid) {
-			pidtab[i] = PID_UNKNOWN;
+		if (ctx->pidtab[i] == feed->pid) {
+			ctx->pidtab[i] = PID_UNKNOWN;
+			ctx->pusitab[i] = 0;
+			ctx->feedtab[i] = NULL;
 			return 0;
 		}
 
@@ -120,7 +123,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 
 	/* organize PID list table */
 	if (pidtab_find_index(ctx->pidtab, feed->pid) < 0) {
-		pidtab_add_pid(ctx->pidtab, feed->pid);
+		pidtab_add_pid(ctx, feed);
 
 		pidtab_copy_to_msg(ctx, &msg);
 
@@ -139,7 +142,7 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 	/* organize PID list table */
 	if (pidtab_find_index(ctx->pidtab, feed->pid) > -1) {
-		pidtab_del_pid(ctx->pidtab, feed->pid);
+		pidtab_del_pid(ctx, feed);
 
 		pidtab_copy_to_msg(ctx, &msg);
 
@@ -383,6 +386,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (ctx->pidtab[i] != PID_UNKNOWN) {
 			seq_printf(seq, " %i", ctx->pidtab[i]);
+			if (ctx->pusitab[i]==1) seq_printf(seq, "*");
 			pcnt++;
 		}
 
@@ -530,7 +534,6 @@ static int __init vtunerc_init(void)
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
 		sema_init(&ctx->tswrite_sem, 1);
-		sema_init(&ctx->tsread_sem, 1);
 
 		/* init pid table */
 		for (i = 0; i < MAX_PIDTAB_LEN; i++)
@@ -631,9 +634,6 @@ MODULE_VERSION(VTUNERC_MODULE_VERSION);
 
 module_param_named(devices, config.devices, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(devices, "Number of virtual adapters (default is 1)");
-
-module_param_named(tscheck, config.tscheck, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(tscheck, "Check TS packet validity (default is 0)");
 
 module_param_named(debug, config.debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(debug, "Enable debug messages (default is 0)");
