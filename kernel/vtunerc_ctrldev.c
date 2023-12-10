@@ -280,7 +280,11 @@ int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx)
 	if (cdev_add(&cdev, chdev, ctx->config->devices) < 0)
 		printk(KERN_WARNING "vtunerc%d: unable to create dev\n", ctx->idx);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 	pclass = class_create(THIS_MODULE, "vtuner");
+#else
+	pclass = class_create("vtuner");
+#endif
 	if (IS_ERR(pclass)) {
 		printk(KERN_ERR "vtunerc%d: unable to register major %d\n", ctx->idx, VTUNERC_CTRLDEV_MAJOR);
 		return PTR_ERR(pclass);
