@@ -59,8 +59,6 @@ struct vtunerc_ctx {
 
 	/* internals */
 	int idx;
-	//char *fe_type;
-	//u8 vtype;
 	struct vtunerc_config *config;
 	struct vtuner_signal signal;
 	struct fe_params fe_params;
