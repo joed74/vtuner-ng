@@ -10,5 +10,8 @@ $(BIN):  $(OBJ)
 install:
 	cp $(BIN) /usr/local/bin
 
+uninstall:
+	rm /usr/local/bin/$(BIN)
+
 clean:
 	rm -f $(BIN) *.o *~

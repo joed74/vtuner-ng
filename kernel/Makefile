@@ -17,11 +17,15 @@ ccflags-y += -Iinclude/media
 ccflags-y += -DVTUNERC_MAX_ADAPTERS=$(VTUNERC_MAX_ADAPTERS)
 
 # for external compilation
-KDIR := /lib/modules/$(shell uname -r)/build
+ifeq ($(shell make -sC /usr/src/linux kernelversion 2> /dev/null),)
+       KDIR := /lib/modules/$(shell uname -r)
+else
+       KDIR := /lib/modules/$(shell make -sC /usr/src/linux kernelversion)
+endif
 PWD := $(shell pwd)
 
 default:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules
+	$(MAKE) -C $(KDIR)/build M=$(PWD) modules
 
 clean:
 	rm -f *.a
@@ -35,5 +39,5 @@ clean:
 	rm -f *.order
 	
 install:
-	cp vtunerc.ko /lib/modules/$(shell uname -r)/kernel/drivers/media/tuners
+	cp vtunerc.ko $(KDIR)/kernel/drivers/media/tuners
 	depmod -a
