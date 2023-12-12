@@ -36,7 +36,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct dvb_demux *demux = &ctx->demux;
 	int tailsize = len % 188;
 	unsigned short pid;
-	int i, idx, cc;
+	int i, idx, cc, marker;
 	bool sendfiller;
 
 	if (len < 188) {
@@ -87,15 +87,26 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		pid = ((ctx->kernel_buf[i+1] & 0x1f)<<8)|ctx->kernel_buf[i+2];
 		idx = pidtab_find_index(ctx->pidtab, pid);
 		if (idx!=-1) {
-			if (ctx->kernel_buf[i+1] & 0x40 && ctx->pusitab[idx]==0) {
-				cc = ctx->kernel_buf[i+3] & 0x0f;
-				dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
-				cc = cc - 1;
-				if (cc == -1) cc = 15;
-				ctx->pusitab[idx]=1;
-				ctx->feedtab[idx]->cc = cc;
+			marker = 0;
+			if (ctx->pusitab[idx]==0) {
+				if (ctx->kernel_buf[i+1] & 0x40) marker=1;
+				if ((ctx->kernel_buf[i+3] & 0x20) && ctx->kernel_buf[i+4]==0xB7) marker=2;
+				if (marker) {
+					cc = ctx->kernel_buf[i+3] & 0x0f;
+					if (marker==1) dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
+					if (marker==2) dprintk(ctx, "found filler for pid %i (cc=%i)\n", pid , cc);
+					cc = cc - 1;
+					if (cc == -1) cc = 15;
+					ctx->pusitab[idx] = marker;
+					ctx->feedtab[idx]->cc = cc;
+				}
 			}
-			if (ctx->pusitab[idx]==1) sendfiller=0;
+			if (ctx->pusitab[idx]==2 && ctx->kernel_buf[i+1] & 0x40) {
+				ctx->pusitab[idx]=1;
+				cc = ctx->kernel_buf[i+3] & 0x0f;
+				dprintk(ctx, "found pusi later for pid %i (cc=%i)\n", pid, cc);
+			}
+			if (ctx->pusitab[idx]!=0) sendfiller=0;
 		} else {
 			if (pid!=0x1fff) dprintk(ctx, "pid %i not found in pidtab\n", pid);
 		}
