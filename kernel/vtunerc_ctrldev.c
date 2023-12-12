@@ -40,8 +40,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	bool sendfiller;
 
 	if (len < 188) {
-		printk(KERN_ERR "vtunerc%d: Data are shorter then TS packet size (188B)\n",
-				ctx->idx);
+		printk(KERN_ERR "vtunerc%d: Data are shorter then TS packet size (188B)\n", ctx->idx);
 		return -EINVAL;
 	}
 
@@ -108,12 +107,14 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			ctx->kernel_buf[i+4]=0xB7; // adaption field length (whole packet)
 			ctx->kernel_buf[i+5]=0x00; // adaption fileds (none)
 			memset(&ctx->kernel_buf[i+6],0xff,182);
+			ctx->stat_fi_data += 188;
 		}
 
+		if (pid==0x1fff) ctx->stat_fe_data += 188;
 		dvb_dmx_swfilter_packets(demux, &ctx->kernel_buf[i], 1);
 	}
 
-	// we habe a TS packet, so we habe a lock!
+	// we have a TS packet, so we have a lock!
 	if (ctx->kernel_buf[0]==0x47) ctx->signal.status = FE_HAS_LOCK;
 
 	ctx->stat_wr_data += len;
@@ -187,6 +188,8 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	if (ctx->fd_opened == 0) {
 		ctx->stat_time = 0;
 		ctx->stat_wr_data = 0;
+		ctx->stat_fi_data = 0;
+		ctx->stat_fe_data = 0;
 		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
 		memset(&ctx->fe_params,0,sizeof(struct fe_params));
 		memset(&ctx->pusitab,0,sizeof(unsigned char)*MAX_PIDTAB_LEN);

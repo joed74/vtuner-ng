@@ -391,7 +391,9 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 		}
 
 	seq_printf(seq, " (len=%d)\n", pcnt);
-	seq_printf(seq, "  TS data     : %u\n", ctx->stat_wr_data);
+	seq_printf(seq, "  TS data     : %lu\n", ctx->stat_wr_data);
+	seq_printf(seq, "  Int. filler : %lu\n", ctx->stat_fi_data);
+	seq_printf(seq, "  Ext. filler : %lu\n", ctx->stat_fe_data);
 	return 0;
 }
 

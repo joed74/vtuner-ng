@@ -87,7 +87,9 @@ struct vtunerc_ctx {
 	wait_queue_head_t ctrldev_wait_packet_wq;
 
 	/* proc statistics */
-	unsigned int stat_wr_data;
+	unsigned long stat_wr_data;
+	unsigned long stat_fi_data; // filler internal
+	unsigned long stat_fe_data; // filler external
 	time64_t stat_time;
 };
 

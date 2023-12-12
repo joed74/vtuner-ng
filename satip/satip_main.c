@@ -126,6 +126,7 @@ int main(int argc, char** argv)
 
   signal(SIGHUP, hangup);
   signal(SIGINT, hangup);
+  signal(SIGTERM, hangup);
 
   while((opt = getopt(argc, argv, "h:p:d:f:m:l:")) != -1 ) {
     switch(opt) 
