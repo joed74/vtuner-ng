@@ -108,7 +108,11 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 			if (ctx->pusitab[idx]!=0) sendfiller=0;
 		} else {
-			if (pid!=0x1fff) dprintk(ctx, "pid %i not found in pidtab\n", pid);
+			if (pid!=0x1fff) {
+				dprintk(ctx, "pid %i not found in pidtab\n", pid);
+			} else {
+				sendfiller=0;
+			}
 		}
 
 		if (sendfiller) {

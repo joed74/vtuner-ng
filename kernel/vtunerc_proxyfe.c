@@ -202,7 +202,17 @@ static int dvb_proxyfe_sleep(struct dvb_frontend *fe)
 
 static int dvb_proxyfe_init(struct dvb_frontend *fe)
 {
+	struct dvb_proxyfe_state *state = fe->demodulator_priv;
+	struct vtunerc_ctx *ctx = state->ctx;
+	dprintk(ctx, "init\n");
 	return 0;
+}
+
+static void dvb_proxyfe_detach(struct dvb_frontend *fe)
+{
+	struct dvb_proxyfe_state *state = fe->demodulator_priv;
+	struct vtunerc_ctx *ctx = state->ctx;
+	dprintk(ctx, "detach\n");
 }
 
 static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode tone)
@@ -293,6 +303,7 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 	.release = dvb_proxyfe_release,
 
 	.init = dvb_proxyfe_init,
+	.detach = dvb_proxyfe_detach,
 	.sleep = dvb_proxyfe_sleep,
 
 	.get_frontend_algo = dvb_proxyfe_get_frontend_algo,
