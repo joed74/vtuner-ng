@@ -37,7 +37,7 @@
 #include "vtuner.h"
 
 int dbg_level = MSG_ERROR;
-unsigned int dbg_mask = MSG_MAIN | MSG_NET | MSG_HW | MSG_SRV; // MSG_DATA
+unsigned int dbg_mask = MSG_MAIN | MSG_NET; // MSG_DATA
 int use_syslog = 0;
 int abort_all = 0;
 
@@ -106,6 +106,20 @@ void hangup(int sig)
    abort_all=1;
 }
 
+void usage(char *name)
+{
+  fprintf(stderr,
+     "usage: %s -h satip_receiver [-p 554] [-d /dev/vtunerc0] [-f satip_frontend] [-l level] [-m mask]\n"
+     "  -h\tip or hostname of satip receiver\n"
+     "  -p\tport of satip receiver (defaults to 554)\n"
+     "  -d\tvtuner device (defaults to /dev/vtunerc0)\n"
+     "  -f\tfrontend on satip, number between 1 to N (defaults to let receiver decide)\n"
+     "  -l\tloglevel: 1 = error, 2 = warnings, 3 = info, 4 = debug (defaults to error)\n"
+     "  -m\tmask for logs: 1 = main, 2 = net, 4 = data, 7 = all (defaults to main + net)\n"
+     ,name
+     );
+}
+
 int main(int argc, char** argv)
 {
   char* host = NULL;
@@ -162,7 +176,7 @@ int main(int argc, char** argv)
   }
 
   if ( host==NULL ) {
-    ERROR(MSG_MAIN,"No host argument\n");
+    usage(argv[0]);
     exit(1);
   }
         
