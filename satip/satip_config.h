@@ -44,18 +44,6 @@ typedef enum
 
 typedef enum
   {
-    SATIPCFG_MS_DVB_S = 5,
-    SATIPCFG_MS_DVB_S2
-  } t_delsys;
-
-typedef enum
-  {
-    SATIPCFG_MT_QPSK = 0,
-    SATIPCFG_MT_8PSK = 9
-  } t_mod_type;
-
-typedef enum
-  {
     SATIPCFG_P_ON = 0,
     SATIPCFG_P_OFF,
     SATIPCFG_P_AUTO
@@ -97,21 +85,27 @@ typedef struct satip_config
   t_satip_config_status status;
 
   /* current/new configuration */
-  t_delsys          delsys;
+  unsigned int      delsys;
   unsigned int      frequency;
   t_polarization    polarization;
   t_roll_off        roll_off;
-  t_mod_type        mod_type;
+  unsigned int      mod_type;
   t_pilots          pilots;
   unsigned int      symbol_rate;
   t_fec_inner       fec_inner;   
-  int               position;
+  unsigned int      inversion;
+
+  /* remote frontend */
   int               frontend;
+
+  /* pids */
   unsigned short    pid[SATIPCFG_MAX_PIDS];  
   
   /* delta info for addpids/delpids cmd */
   unsigned short    mod_pid[SATIPCFG_MAX_PIDS];
 
+  /* postion? */
+  int position;
 } t_satip_config;
 
 
@@ -130,8 +124,9 @@ void satip_del_allpid(t_satip_config* cfg);
 
 int satip_set_position(t_satip_config* cfg, int position);
 
-int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, t_mod_type modtype, unsigned int symrate, t_fec_inner fecinner);
-int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, t_mod_type modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots);
+int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner);
+int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots);
+int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversion, unsigned int modtype, unsigned int symrate);
 
 int satip_valid_config(t_satip_config* cfg);
 int satip_tuning_required(t_satip_config* cfg);

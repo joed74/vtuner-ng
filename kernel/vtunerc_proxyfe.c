@@ -136,6 +136,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
+	int i, pcnt = 0;
 
 	if (ctx->fd_opened < 1) return -EAGAIN;
 	if (c->frequency == 0) return -EINVAL;
@@ -143,7 +144,6 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	memset(&msg, 0, sizeof(msg));
 	msg.body.fe_params.delivery_system = c->delivery_system;
 	msg.body.fe_params.frequency = c->frequency;
-	msg.body.fe_params.inversion = c->inversion;
 
 	switch (c->delivery_system) {
 	case SYS_DVBS:
@@ -165,8 +165,9 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.body.fe_params.u.ofdm.hierarchy_information = c->hierarchy;
 		break;
 	case SYS_DVBC_ANNEX_A:
+	case SYS_DVBC_ANNEX_B:
+		msg.body.fe_params.u.qam.inversion = c->inversion;
 		msg.body.fe_params.u.qam.symbol_rate = c->symbol_rate;
-		msg.body.fe_params.u.qam.fec_inner = c->fec_inner;
 		msg.body.fe_params.u.qam.modulation = c->modulation;
 		break;
 	default:
@@ -179,9 +180,16 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	ctx->stat_time = ktime_get_seconds();
 	ctx->signal.status = FE_NONE;
 
+	dprintk(ctx, "MSG_SET_FRONTEND\n");
+
 	msg.type = MSG_SET_FRONTEND;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 	memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
+
+	for (i = 0; i < MAX_PIDTAB_LEN; i++)
+	   if (ctx->pidtab[i] != PID_UNKNOWN) pcnt++;
+
+	if (pcnt>0) send_pidlist(ctx, &msg);
 	return 0;
 }
 
@@ -205,6 +213,7 @@ static int dvb_proxyfe_init(struct dvb_frontend *fe)
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	dprintk(ctx, "init\n");
+	ctx->adapter_inuse=1;
 	return 0;
 }
 
@@ -213,6 +222,7 @@ static void dvb_proxyfe_detach(struct dvb_frontend *fe)
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	dprintk(ctx, "detach\n");
+	ctx->adapter_inuse=0;
 }
 
 static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode tone)
@@ -293,7 +303,7 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 		.frequency_tolerance_hz	= 29500 * kHz,
 		.symbol_rate_min	= 450000,
 		.symbol_rate_max	= 45000000,
-		.caps = FE_CAN_INVERSION_AUTO | FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |
+		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |
 			FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 | FE_CAN_FEC_8_9 | FE_CAN_QPSK | FE_CAN_RECOVER |
 			FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_64 | FE_CAN_QAM_AUTO | FE_CAN_TRANSMISSION_MODE_AUTO |
 			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO | FE_CAN_QAM_128 | FE_CAN_QAM_256 | FE_CAN_FEC_AUTO |

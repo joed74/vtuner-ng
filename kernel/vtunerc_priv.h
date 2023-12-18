@@ -71,6 +71,7 @@ struct vtunerc_ctx {
 	struct semaphore ioctl_sem;
 	struct semaphore tswrite_sem;
 	int fd_opened;
+	int adapter_inuse;
 
 	char *procname;
 
@@ -100,6 +101,7 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
 int pidtab_find_index(unsigned short *pidtab, int pid);
+void send_pidlist(struct vtunerc_ctx *ctx, struct vtuner_message *msg);
 #define dprintk(ctx, fmt, arg...) do {				\
 if (ctx->config && (ctx->config->debug))			\
 	printk(KERN_DEBUG "vtunerc%d: " fmt, ctx->idx, ##arg);	\

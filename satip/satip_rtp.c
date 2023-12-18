@@ -35,10 +35,6 @@
 
 #include "vtuner.h"
 
-#define PORT_BASE 45000
-#define PORT_RANGE 2000
-
-
 typedef struct satip_rtp
 {
   int fd;
@@ -225,20 +221,28 @@ static void* rtp_receiver(void* param)
 
 
 
-t_satip_rtp*  satip_rtp_new(int fd)
+t_satip_rtp*  satip_rtp_new(int fd, int fixed_rtp_port)
 {
   t_satip_rtp* srtp;
   int rtp_sock, rtcp_sock;
   int rtp_port, rtcp_port;
   struct timespec ts;
-  int attempts=PORT_RANGE/2;
+  int PORT_RANGE = 2000;
+  int PORT_BASE = 45000;
+  int attempts;
 
+  if (fixed_rtp_port!=-1) {
+     PORT_BASE = fixed_rtp_port;
+     PORT_RANGE = 2;
+  }
+
+  attempts = PORT_RANGE/2;
 
   clock_gettime(CLOCK_REALTIME,&ts);
 
   srandom(ts.tv_nsec);
 
-  while ( --attempts > 0 )
+  while ( --attempts > 0 || PORT_RANGE == 2)
     {
       struct sockaddr_in inaddr;
 
@@ -292,7 +296,7 @@ t_satip_rtp*  satip_rtp_new(int fd)
       break;
     }
 
-  if (attempts <= 0)
+  if (attempts <= 0 && PORT_RANGE > 2)
     return NULL;
 
   srtp=(t_satip_rtp*)malloc(sizeof(t_satip_rtp));

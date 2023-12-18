@@ -109,13 +109,14 @@ void hangup(int sig)
 void usage(char *name)
 {
   fprintf(stderr,
-     "usage: %s -h satip_receiver [-p 554] [-d /dev/vtunerc0] [-f satip_frontend] [-l level] [-m mask]\n"
+     "usage: %s -h satip_receiver [-p 554] [-d /dev/vtunerc0] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port]\n"
      "  -h\tip or hostname of satip receiver\n"
      "  -p\tport of satip receiver (defaults to 554)\n"
      "  -d\tvtuner device (defaults to /dev/vtunerc0)\n"
      "  -f\tfrontend on satip, number between 1 to N (defaults to let receiver decide)\n"
      "  -l\tloglevel: 1 = error, 2 = warnings, 3 = info, 4 = debug (defaults to error)\n"
      "  -m\tmask for logs: 1 = main, 2 = net, 4 = data, 7 = all (defaults to main + net)\n"
+     "  -r\tfixed rtp port (e.g. 45200)\n"
      ,name
      );
 }
@@ -126,6 +127,7 @@ int main(int argc, char** argv)
   char* port = "554";
   char* device = "/dev/vtunerc0";
   int frontend = -1;
+  int fixed_rtp_port = -1;
 
   t_satip_config* satconf;
   struct satip_rtsp* srtsp;
@@ -142,7 +144,7 @@ int main(int argc, char** argv)
   signal(SIGINT, hangup);
   signal(SIGTERM, hangup);
 
-  while((opt = getopt(argc, argv, "h:p:d:f:m:l:")) != -1 ) {
+  while((opt = getopt(argc, argv, "h:p:d:f:m:l:r:")) != -1 ) {
     switch(opt) 
       {
       case 'h': 
@@ -167,6 +169,10 @@ int main(int argc, char** argv)
 
       case 'l':
 	dbg_level = atoi(optarg);
+	break;
+
+      case 'r':
+	fixed_rtp_port = atoi(optarg);
 	break;
 
       default:
@@ -208,11 +214,11 @@ int main(int argc, char** argv)
   
   if ( satvt == NULL )
     {
-      ERROR(MSG_MAIN,"vtuner control failed\n");
+      fprintf(stderr,"cannot open %s\n", device);
       exit(1);
     }
 
-  srtp  = satip_rtp_new(satip_vtuner_fd(satvt));
+  srtp  = satip_rtp_new(satip_vtuner_fd(satvt), fixed_rtp_port);
 
   pollfds[0].fd=satip_vtuner_fd(satvt);
   pollfds[0].events = POLLPRI;

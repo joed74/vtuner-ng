@@ -23,7 +23,7 @@
 
 struct satip_rtp;
 
-struct satip_rtp*  satip_rtp_new(int fd);
+struct satip_rtp*  satip_rtp_new(int fd, int fixed_rtp_port);
 int satip_rtp_port(struct satip_rtp* srtp);
 
 #endif

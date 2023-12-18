@@ -146,7 +146,7 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
   t_polarization pol;
   switch (msg->body.fe_params.delivery_system)
   {
-     case SATIPCFG_MS_DVB_S:
+     case SYS_DVBS:
        pol = get_polarization(vt, msg);
        satip_set_dvbs(vt->satip_cfg, msg->body.fe_params.frequency,
 		       msg->body.fe_params.u.qpsk.sat.tone, pol,
@@ -154,7 +154,7 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 		       msg->body.fe_params.u.qpsk.symbol_rate,
 		       msg->body.fe_params.u.qpsk.fec_inner);
        break;
-     case SATIPCFG_MS_DVB_S2:
+     case SYS_DVBS2:
        pol = get_polarization(vt, msg);
        satip_set_dvbs2(vt->satip_cfg, msg->body.fe_params.frequency,
 		       msg->body.fe_params.u.qpsk.sat.tone, pol,
@@ -164,8 +164,15 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 		       msg->body.fe_params.u.qpsk.rolloff,
 		       msg->body.fe_params.u.qpsk.pilot);
        break;
-
-      default:
+     case SYS_DVBC_ANNEX_A:
+     case SYS_DVBC_ANNEX_B:
+       satip_set_dvbc(vt->satip_cfg, msg->body.fe_params.frequency,
+		       msg->body.fe_params.u.qam.inversion,
+		       msg->body.fe_params.u.qam.modulation,
+		       msg->body.fe_params.u.qam.symbol_rate);
+	DEBUG(MSG_NET,"inversion=%i\n", msg->body.fe_params.u.qam.inversion);
+       break;
+     default:
        ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_params.delivery_system);
        break;
   }

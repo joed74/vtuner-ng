@@ -368,7 +368,8 @@ static int send_setup(t_satip_rtsp* rtsp)
 
 
   satip_settle_config(rtsp->satip_config);
-  
+#else
+  printed += snprintf(buf+printed,remain-printed,"pids=none");
 #endif
 
 #if 1

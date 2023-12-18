@@ -57,7 +57,6 @@ struct sat_params {
 struct fe_params {
 	u32	delivery_system;
 	u32	frequency;
-	u8	inversion;
 	union {
 		struct {
 			// DVB-S , DVB-S2
@@ -71,8 +70,8 @@ struct fe_params {
 		struct {
 			// DVB-C
 			u32	symbol_rate;
-			u32	fec_inner;
 			u32	modulation;
+			u32	inversion;
 		} qam;
 		struct {
 			// DVB-T

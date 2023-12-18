@@ -85,6 +85,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 
 		sendfiller=1;
 		pid = ((ctx->kernel_buf[i+1] & 0x1f)<<8)|ctx->kernel_buf[i+2];
+		if (pid!=0x1fff) ctx->signal.status = FE_HAS_LOCK; // no filler -> we have a lock!
 		idx = pidtab_find_index(ctx->pidtab, pid);
 		if (idx!=-1) {
 			marker = 0;
@@ -128,9 +129,6 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		if (pid==0x1fff) ctx->stat_fe_data += 188;
 		dvb_dmx_swfilter_packets(demux, &ctx->kernel_buf[i], 1);
 	}
-
-	// we have a TS packet, so we have a lock!
-	if (ctx->kernel_buf[0]==0x47) ctx->signal.status = FE_HAS_LOCK;
 
 	ctx->stat_wr_data += len;
 
@@ -186,7 +184,8 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
-	int i, minor;
+	int minor;
+	// int i;
 
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
@@ -206,11 +205,8 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->stat_fi_data = 0;
 		ctx->stat_fe_data = 0;
 		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
-		memset(&ctx->fe_params,0,sizeof(struct fe_params));
+		ctx->fe_params.delivery_system=0; // now retune can happen
 		memset(&ctx->pusitab,0,sizeof(unsigned char)*MAX_PIDTAB_LEN);
-		memset(&ctx->pidtab,0,sizeof(unsigned short)*MAX_PIDTAB_LEN);
-		for (i = 0; i < MAX_PIDTAB_LEN; i++)
-			ctx->pidtab[i] = PID_UNKNOWN;
 	}
 	return 0;
 }
@@ -360,11 +356,9 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 		return -ERESTARTSYS;
 
 	if (ctx->fd_opened < 1) {
-		//dprintk(ctx, "XCH_MSG: %d: no fd\n", msg->type);
 		up(&ctx->xchange_sem);
 		return 0;
 	}
-	dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
 
 #if 0
 	BUG_ON(ctx->ctrldev_request.type != -1);
@@ -380,13 +374,11 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 	wake_up_interruptible(&ctx->ctrldev_wait_request_wq);
 
 	if (!wait4response) {
-		dprintk(ctx, "XCH_MSG: %d (DONE)\n", msg->type);
 		// no up here, results in orphan requests!
 		return 0;
 	}
 
 	if (wait_event_interruptible(ctx->ctrldev_wait_response_wq, ctx->ctrldev_response.type != -1)) {
-		dprintk(ctx, "XCH_MSG: %d: wait_event interrupted\n", msg->type);
 		ctx->ctrldev_request.type = -1;
 		up(&ctx->xchange_sem);
 		return -ERESTARTSYS;
@@ -394,7 +386,6 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 
 	BUG_ON(ctx->ctrldev_response.type == -1);
 
-	dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
 	memcpy(msg, &ctx->ctrldev_response, sizeof(struct vtuner_message));
 	ctx->ctrldev_response.type = -1;
 

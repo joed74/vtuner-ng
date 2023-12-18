@@ -92,12 +92,21 @@ static int pidtab_del_pid(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
 	return -1;
 }
 
-static void pidtab_copy_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
+void pidtab_copy_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
 {
 	int i;
 
 	for (i = 0; i < MAX_PIDTAB_LEN ; i++)
 		msg->body.pidlist[i] = ctx->pidtab[i];
+}
+
+void send_pidlist(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
+{
+	if (ctx->fe_params.delivery_system==0) return;
+	dprintk(ctx,"MSG_PIDLIST\n");
+	pidtab_copy_to_msg(ctx, msg);
+	msg->type = MSG_PIDLIST;
+	vtunerc_ctrldev_xchange_message(ctx, msg, 0);
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
@@ -126,11 +135,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	/* organize PID list table */
 	if (pidtab_find_index(ctx->pidtab, feed->pid) < 0) {
 		pidtab_add_pid(ctx, feed);
-
-		pidtab_copy_to_msg(ctx, &msg);
-
-		msg.type = MSG_PIDLIST;
-		vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
+		send_pidlist(ctx, &msg);
 	}
 
 	return 0;
@@ -147,11 +152,7 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 	/* organize PID list table */
 	if (pidtab_find_index(ctx->pidtab, feed->pid) > -1) {
 		pidtab_del_pid(ctx, feed);
-
-		pidtab_copy_to_msg(ctx, &msg);
-
-		msg.type = MSG_PIDLIST;
-		vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
+		send_pidlist(ctx, &msg);
 	}
 
 	return 0;
@@ -164,7 +165,7 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 static void status2str(struct seq_file *seq, u8 status)
 {
-	seq_puts(seq, "  Status      : ");
+	seq_puts(seq, " status           : ");
 	switch (status) {
 		case FE_HAS_SIGNAL:
 		  seq_puts(seq, "FE_HAS_SIGNAL");
@@ -195,7 +196,7 @@ static void status2str(struct seq_file *seq, u8 status)
 
 static void delsys2str(struct seq_file *seq, enum fe_delivery_system delsys)
 {
-	seq_puts(seq, "  System      : ");
+	seq_puts(seq, " system           : ");
 	switch (delsys) {
 		case SYS_DVBC_ANNEX_A:
 		case SYS_DVBC_ANNEX_B:
@@ -233,12 +234,12 @@ static void satfreq2str(struct seq_file *seq, int frequency, enum fe_sec_tone_mo
 	  else
 	     freq -= 97500;
 
-	seq_printf(seq, "  Frequency   : %i\n", freq/10);
+	seq_printf(seq, " frequency        : %i\n", freq/10);
 }
 
 static void fec2str(struct seq_file *seq, enum fe_code_rate fec)
 {
-	seq_puts(seq, "  FEC         : ");
+	seq_puts(seq, " fec              : ");
 	switch (fec) {
 		case FEC_1_2:
 		  seq_puts(seq, "1/2");
@@ -285,7 +286,7 @@ static void fec2str(struct seq_file *seq, enum fe_code_rate fec)
 
 static void mod2str(struct seq_file *seq, enum fe_modulation modulation)
 {
-	seq_puts(seq, "  Modulation  : ");
+	seq_puts(seq, " modulation       : ");
 	switch (modulation) {
 		case QPSK:
 		  seq_puts(seq, "QPSK");
@@ -301,6 +302,9 @@ static void mod2str(struct seq_file *seq, enum fe_modulation modulation)
 		  break;
 		case QAM_128:
 		  seq_puts(seq, "QAM 128");
+		  break;
+		case QAM_256:
+		  seq_puts(seq, "QAM 256");
 		  break;
 		case QAM_AUTO:
 		  seq_puts(seq, "QUAM AUTO");
@@ -322,7 +326,7 @@ static void mod2str(struct seq_file *seq, enum fe_modulation modulation)
 
 static void roff2str(struct seq_file *seq, enum fe_rolloff rolloff)
 {
-	seq_puts(seq, "  Rolloff     : ");
+	seq_puts(seq, " rolloff          : ");
 	switch (rolloff) {
 		case ROLLOFF_35:
 		  seq_puts(seq, "0.35");
@@ -345,7 +349,7 @@ static void roff2str(struct seq_file *seq, enum fe_rolloff rolloff)
 
 static void pilot2str(struct seq_file *seq, enum fe_pilot pilot)
 {
-	seq_puts(seq, "  Pilot       : ");
+	seq_puts(seq, " pilot            : ");
 	switch (pilot) {
 		case PILOT_ON:
 		  seq_puts(seq, "on");
@@ -362,43 +366,68 @@ static void pilot2str(struct seq_file *seq, enum fe_pilot pilot)
 	seq_puts(seq, "\n");
 }
 
+static void inversion2str(struct seq_file *seq, enum fe_spectral_inversion inversion)
+{
+	seq_puts(seq, " inversion        : ");
+	switch (inversion) {
+		case INVERSION_OFF:
+		  seq_puts(seq, "off");
+		  break;
+		case INVERSION_ON:
+		  seq_puts(seq, "on");
+		  break;
+		case INVERSION_AUTO:
+		  seq_puts(seq, "auto");
+		  break;
+		default:
+		  seq_puts(seq,"unknown");
+	}
+	seq_puts(seq, "\n");
+}
+
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
 	int i, pcnt = 0;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
 
-	seq_printf(seq, "[ vtunerc driver, version " VTUNERC_MODULE_VERSION " ]\n");
-	seq_printf(seq, "  Used by     : %u\n", ctx->fd_opened);
+	seq_printf(seq, "[vtunerc driver, version " VTUNERC_MODULE_VERSION "]\n");
+	seq_printf(seq, " vtunerc%i used by : %u\n", ctx->idx, ctx->fd_opened);
+	seq_printf(seq, " adapter%i in use  : %s\n", ctx->dvb_adapter.num, (ctx->adapter_inuse == 1) ? "yes" : "no");
 	status2str(seq, ctx->signal.status);
 	if (ctx->stat_time>0)
-		seq_printf(seq, "  Last change : %lli\n", ktime_get_seconds()-ctx->stat_time);
+		seq_printf(seq, " last change      : %lli\n", ktime_get_seconds()-ctx->stat_time);
 	if (ctx->fe) {
 		struct fe_params *fep = &ctx->fe_params;
-		if (fep->frequency>0) {
+		if (fep->frequency>0 && fep->delivery_system>0) {
 			delsys2str(seq, fep->delivery_system);
 			if (fep->delivery_system==SYS_DVBS || fep->delivery_system==SYS_DVBS2) {
 				mod2str(seq, fep->u.qpsk.modulation);
 				satfreq2str(seq, fep->frequency, fep->u.qpsk.sat.tone);
-				seq_printf(seq, "  Symbolrate  : %i\n", fep->u.qpsk.symbol_rate / 1000);
+				seq_printf(seq, " symbolrate       : %i\n", fep->u.qpsk.symbol_rate / 1000);
 				fec2str(seq, fep->u.qpsk.fec_inner);
 				roff2str(seq, fep->u.qpsk.rolloff);
 				pilot2str(seq, fep->u.qpsk.pilot);
 			}
+			if (fep->delivery_system==SYS_DVBC_ANNEX_A || fep->delivery_system==SYS_DVBC_ANNEX_B) {
+				mod2str(seq, fep->u.qam.modulation);
+				seq_printf(seq, " frequency        : %i\n", fep->frequency/1000000);
+				seq_printf(seq, " symbolrate       : %i\n", fep->u.qam.symbol_rate / 1000);
+				inversion2str(seq, fep->u.qam.inversion);
+			}
+			seq_printf(seq, " pid tab          :");
+			for (i = 0; i < MAX_PIDTAB_LEN; i++)
+				if (ctx->pidtab[i] != PID_UNKNOWN) {
+					seq_printf(seq, " %i", ctx->pidtab[i]);
+					if (ctx->pusitab[i]==1) seq_printf(seq, "*");
+					if (ctx->pusitab[i]==2) seq_printf(seq, "-");
+					pcnt++;
+				}
+			seq_printf(seq, " (len=%d)\n", pcnt);
 		}
 	}
-	seq_printf(seq, "  PID tab     :");
-	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-		if (ctx->pidtab[i] != PID_UNKNOWN) {
-			seq_printf(seq, " %i", ctx->pidtab[i]);
-			if (ctx->pusitab[i]==1) seq_printf(seq, "*");
-			if (ctx->pusitab[i]==2) seq_printf(seq, "-");
-			pcnt++;
-		}
-
-	seq_printf(seq, " (len=%d)\n", pcnt);
-	seq_printf(seq, "  TS data     : %lu\n", ctx->stat_wr_data);
-	seq_printf(seq, "  Int. filler : %lu\n", ctx->stat_fi_data);
-	seq_printf(seq, "  Ext. filler : %lu\n", ctx->stat_fe_data);
+	seq_printf(seq, " ts data          : %lu\n", ctx->stat_wr_data);
+	seq_printf(seq, " internal filler  : %lu\n", ctx->stat_fi_data);
+	seq_printf(seq, " external filler  : %lu\n", ctx->stat_fe_data);
 	return 0;
 }
 
