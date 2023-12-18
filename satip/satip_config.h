@@ -20,9 +20,11 @@
 #ifndef _SATIP_CONFIG_H
 #define _SATIP_CONFIG_H
 
+#include "vtuner.h"
 
 typedef enum
   {
+    SATIPCFG_UNSET = -1,
     SATIPCFG_P_HORIZONTAL = 0,
     SATIPCFG_P_VERTICAL,
     SATIPCFG_P_CIRC_LEFT,
@@ -44,7 +46,7 @@ typedef enum
   {
     SATIPCFG_MS_DVB_S = 5,
     SATIPCFG_MS_DVB_S2
-  } t_mod_sys;
+  } t_delsys;
 
 typedef enum
   {
@@ -87,20 +89,18 @@ typedef enum
 
 
 
-#define SATIPCFG_MAX_PIDS 64
+#define SATIPCFG_MAX_PIDS MAX_PIDTAB_LEN
 
 typedef struct satip_config
 {
   /* status info */
   t_satip_config_status status;
-  unsigned int          param_cfg;
 
   /* current/new configuration */
+  t_delsys          delsys;
   unsigned int      frequency;
   t_polarization    polarization;
-  int               lnb_off;
   t_roll_off        roll_off;
-  t_mod_sys         mod_sys;
   t_mod_type        mod_type;
   t_pilots          pilots;
   unsigned int      symbol_rate;
@@ -117,7 +117,7 @@ typedef struct satip_config
 
 
 
-
+#define SATIPCFG_NOCHANGE -1
 #define SATIPCFG_OK       0
 #define SATIPCFG_ERROR    1
 
@@ -128,17 +128,10 @@ int satip_del_pid(t_satip_config* cfg,unsigned short pid);
 int satip_add_pid(t_satip_config* cfg,unsigned short pid);
 void satip_del_allpid(t_satip_config* cfg);
 
-int satip_set_freq(t_satip_config* cfg,unsigned int freq);
-int satip_set_polarization(t_satip_config* cfg,t_polarization pol);
-int satip_lnb_off(t_satip_config* cfg);
-int satip_set_rolloff(t_satip_config* cfg,t_roll_off rolloff);
-int satip_set_modsys(t_satip_config* cfg,t_mod_sys modsys);
-int satip_set_modtype(t_satip_config* cfg,t_mod_type modtype);
-int satip_set_pilots(t_satip_config* cfg,t_pilots pilots);
-int satip_set_symbol_rate(t_satip_config* cfg,unsigned int symrate);
-int satip_set_fecinner(t_satip_config* cfg, t_fec_inner fecinner);
 int satip_set_position(t_satip_config* cfg, int position);
 
+int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, t_mod_type modtype, unsigned int symrate, t_fec_inner fecinner);
+int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, t_mod_type modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots);
 
 int satip_valid_config(t_satip_config* cfg);
 int satip_tuning_required(t_satip_config* cfg);

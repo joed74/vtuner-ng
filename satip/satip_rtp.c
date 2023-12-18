@@ -89,7 +89,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 	  if (plen>1)
 	    {
 	      val=buf[2];
-	      DEBUG(MSG_MAIN,"RTCP: app defined (204) name: %c%c%c%c\n",
+	      DEBUG(MSG_DATA,"RTCP: app defined (204) name: %c%c%c%c\n",
 		    val & 0x000000ff,
 		    val>>8 & 0x000000ff,
 		    val>>16 & 0x000000ff,
@@ -100,7 +100,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 		{
 		  snprintf(infobuf,val,"%s",(char*) &buf[4]);
 		  infobuf[val]=0;
-		  DEBUG(MSG_MAIN,"RTCP: app info: %s\n",infobuf);
+		  DEBUG(MSG_DATA,"RTCP: app info: %s\n",infobuf);
 		  char *token;
 		  char *rest = infobuf;
 		  int nr=0;
@@ -139,7 +139,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 	  break;
 
 	default:
-	  DEBUG(MSG_MAIN,"RTCP: packet type %d len %d\n",pt,plen);
+	  DEBUG(MSG_DATA,"RTCP: packet type %d len %d\n",pt,plen);
 	}
 
       if (update_status) {

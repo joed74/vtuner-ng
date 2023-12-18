@@ -85,23 +85,11 @@ int satip_vtuner_fd(struct satip_vtuner* vt)
   return vt->fd;
 }
 
-
-static void set_voltage(struct satip_vtuner* vt, struct vtuner_message* msg)
-{
-  if ( msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_13 )
-    satip_set_polarization(vt->satip_cfg, SATIPCFG_P_VERTICAL);
-  else if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_18)
-    satip_set_polarization(vt->satip_cfg, SATIPCFG_P_HORIZONTAL);
-  else  /*  SEC_VOLTAGE_OFF */
-    satip_lnb_off(vt->satip_cfg);
-
-  DEBUG(MSG_MAIN,"set voltage:  %d\n",msg->body.fe_params.u.qpsk.sat.voltage);
-}
-
-static void diseqc_msg(struct satip_vtuner* vt, struct vtuner_message* msg)
+static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
   char dbg[50];
   struct diseqc_master_cmd* cmd=&msg->body.fe_params.u.qpsk.sat.diseqc_master_cmd;
+  t_polarization ret = SATIPCFG_UNSET;
 
   if ( cmd->msg[0] == 0xe0 &&
        cmd->msg[1] == 0x10 &&
@@ -121,9 +109,9 @@ static void diseqc_msg(struct satip_vtuner* vt, struct vtuner_message* msg)
 	}
 
       if ( (data & 0x02) == 0x02 )
-	satip_set_polarization(vt->satip_cfg, SATIPCFG_P_HORIZONTAL);	
+	ret = SATIPCFG_P_HORIZONTAL;
       else if ( (data & 0x22) == 0x20 )
-	satip_set_polarization(vt->satip_cfg, SATIPCFG_P_VERTICAL);
+	ret = SATIPCFG_P_VERTICAL;
 
       /* some invalid combinations ? */
       satip_set_position(vt->satip_cfg, ( (data & 0x0c) >> 2) + 1 );
@@ -139,54 +127,48 @@ static void diseqc_msg(struct satip_vtuner* vt, struct vtuner_message* msg)
 	  cmd->msg_len);
        DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_MSG:  %s\n",dbg);
     }
+  else
+    {
+      if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_13)
+	ret = SATIPCFG_P_VERTICAL;
+      else if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_18)
+	ret = SATIPCFG_P_HORIZONTAL;
+    }
+  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_A)
+     satip_set_position(vt->satip_cfg,1);
+  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_B)
+     satip_set_position(vt->satip_cfg,2);
+  return ret;
 }
 
 static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
-  set_voltage(vt, msg);
-  diseqc_msg(vt, msg);
+  t_polarization pol;
+  switch (msg->body.fe_params.delivery_system)
+  {
+     case SATIPCFG_MS_DVB_S:
+       pol = get_polarization(vt, msg);
+       satip_set_dvbs(vt->satip_cfg, msg->body.fe_params.frequency,
+		       msg->body.fe_params.u.qpsk.sat.tone, pol,
+		       msg->body.fe_params.u.qpsk.modulation,
+		       msg->body.fe_params.u.qpsk.symbol_rate,
+		       msg->body.fe_params.u.qpsk.fec_inner);
+       break;
+     case SATIPCFG_MS_DVB_S2:
+       pol = get_polarization(vt, msg);
+       satip_set_dvbs2(vt->satip_cfg, msg->body.fe_params.frequency,
+		       msg->body.fe_params.u.qpsk.sat.tone, pol,
+		       msg->body.fe_params.u.qpsk.modulation,
+		       msg->body.fe_params.u.qpsk.symbol_rate,
+		       msg->body.fe_params.u.qpsk.fec_inner,
+		       msg->body.fe_params.u.qpsk.rolloff,
+		       msg->body.fe_params.u.qpsk.pilot);
+       break;
 
-  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_A)
-      satip_set_position(vt->satip_cfg,1);
-  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_B)
-      satip_set_position(vt->satip_cfg,2);
-
-  int frequency = msg->body.fe_params.frequency/100;
-
-  /* revert frequency shift */
-  if ( msg->body.fe_params.u.qpsk.sat.tone == SEC_TONE_ON ) /* high band */
-    frequency += 106000;
-  else /* low band */
-    if ( frequency-97500 < 0 )
-      frequency+=97500;
-    else
-      frequency-=97500;
-
-  satip_set_freq(vt->satip_cfg, frequency);
-
-  /* symbol rate */
-  satip_set_symbol_rate(vt->satip_cfg, msg->body.fe_params.u.qpsk.symbol_rate/1000 );
-
-  /* FEC */
-  satip_set_fecinner(vt->satip_cfg, msg->body.fe_params.u.qpsk.fec_inner);
-
-  /* delivery system */
-  satip_set_modsys(vt->satip_cfg, msg->body.fe_params.delivery_system);
-
-  /* Modulation */
-  satip_set_modtype(vt->satip_cfg, msg->body.fe_params.u.qpsk.modulation);
-
-  /* RollOff */
-  satip_set_rolloff(vt->satip_cfg, msg->body.fe_params.u.qpsk.rolloff);
-
-  /* Pilot */
-  satip_set_pilots(vt->satip_cfg, msg->body.fe_params.u.qpsk.pilot);
-
-  DEBUG(MSG_MAIN,"MSG_SET_FRONTEND freq: %d symrate: %d fec: %s rol: %s \n",
-	frequency,
-	msg->body.fe_params.u.qpsk.symbol_rate,
-	strmap_fecinner[msg->body.fe_params.u.qpsk.fec_inner],
-	strmap_rolloff[msg->body.fe_params.u.qpsk.rolloff] );
+      default:
+       ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_params.delivery_system);
+       break;
+  }
 }
 
 static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
@@ -200,12 +182,13 @@ static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
   for (i=0; i<MAX_PIDTAB_LEN; i++)
     if (pidlist[i] < 8192  )
       {
-	if (!hdr) {
-	  DEBUG(MSG_MAIN,"MSG_SET_PIDLIST:\n");
-	  hdr=1;
+        if (satip_add_pid(vt->satip_cfg,pidlist[i])==SATIPCFG_OK) {
+	  if (!hdr) {
+	    DEBUG(MSG_MAIN,"MSG_SET_PIDLIST:\n");
+	    hdr=1;
+	  }
+	  DEBUG(MSG_MAIN,"%d\n",pidlist[i]);
 	}
-        satip_add_pid(vt->satip_cfg,pidlist[i]);
-	DEBUG(MSG_MAIN,"%d\n",pidlist[i]);
       }
 }
 

@@ -22,27 +22,6 @@
 #include "satip_config.h"
 #include "log.h"
 
-/* configuration items present */
-#define  PC_FREQ      0x0001
-#define  PC_POL       0x0002
-#define  PC_ROLLOFF   0x0004
-#define  PC_MODSYS    0x0008
-#define  PC_MODTYPE   0x0010
-#define  PC_PILOTS    0x0020
-#define  PC_SYMRATE   0x0040
-#define  PC_FECINNER  0x0080
-#define  PC_POSITION  0x0100
-
-#define  PC_COMPLETE_DVBS   \
-  ( PC_FREQ | PC_POL | PC_MODSYS | PC_SYMRATE | \
-    PC_FECINNER | PC_POSITION )
-
-#define  PC_COMPLETE_DVBS2  \
-  ( PC_FREQ | PC_POL | PC_ROLLOFF | PC_MODSYS | \
-    PC_MODTYPE | PC_PILOTS | PC_SYMRATE | \
-    PC_FECINNER | PC_POSITION )
-
-
 /* PID handling */
 #define PID_VALID  0
 #define PID_IGNORE 1
@@ -50,12 +29,9 @@
 #define PID_DELETE 3
 
 /* strings for query strings */
-char  const strmap_polarization[] = { 'h', 'v', 'l', 'r' };
+char  const chrmap_polarization[] = { 'h', 'v', 'l', 'r' };
 char* const strmap_fecinner[] = { "","12","23","34","45","56","67","78","89","AUTO","35","910","25" };
 char* const strmap_rolloff[] = { "0.35","0.20","0.25","AUTO","0.15","0.10","0.05" };
-
-
-
 
 t_satip_config* satip_new_config(int frontend)
 {
@@ -70,12 +46,9 @@ t_satip_config* satip_new_config(int frontend)
   return cfg;
 }
 
-
-
 /*
  * PIDs need extra handling to cover "addpids" and "delpids" use cases
  */
-
 
 static void pidupdate_status(t_satip_config* cfg)
 {
@@ -139,16 +112,14 @@ int satip_del_pid(t_satip_config* cfg,unsigned short pid)
 	  case PID_IGNORE:
 	    break;
 	    
-	  case PID_DELETE: /* pid shall already be deleted*/
-	    return SATIPCFG_OK;
+	  case PID_DELETE: /* pid already deleted*/
+	    return SATIPCFG_NOCHANGE;
 	  }
     }
   
   /* pid was not found, ignore request */
   return SATIPCFG_OK;
 }
-
-
 
 int satip_add_pid(t_satip_config* cfg,unsigned short pid)
 {
@@ -163,7 +134,7 @@ int satip_add_pid(t_satip_config* cfg,unsigned short pid)
 	  case PID_VALID: /* already present */
 	  case PID_ADD:   /* pid shall be already added */
 	    /* just return current status, no update required */
-	    return SATIPCFG_OK;
+	    return SATIPCFG_NOCHANGE;
 
 	  case PID_IGNORE:
 	    break;
@@ -192,155 +163,64 @@ int satip_add_pid(t_satip_config* cfg,unsigned short pid)
   return SATIPCFG_ERROR;
 }
 
-
-
-
-
-
-static void  param_update_status(t_satip_config* cfg)
+unsigned int get_sat_frequency(unsigned int freq, unsigned char tone)
 {
-  if ( cfg->param_cfg & PC_MODSYS )
-    {
-      if ( (cfg->mod_sys == SATIPCFG_MS_DVB_S && (cfg->param_cfg & PC_COMPLETE_DVBS) == PC_COMPLETE_DVBS ) ||
-	   (cfg->param_cfg & PC_COMPLETE_DVBS2) == PC_COMPLETE_DVBS2 )
-	cfg->status = SATIPCFG_CHANGED;
-    }
-  else /* modulation system is not set */
-    {
-
-      cfg->status = SATIPCFG_INCOMPLETE;
-    }
-
-  DEBUG(MSG_MAIN,"Status %04x \n",cfg->param_cfg);
+  int frequency = (int) (freq / 100);
+  if (tone == SEC_TONE_ON)
+    frequency += 106000;
+  else
+    if (frequency - 97500 < 0)
+      frequency += 97500;
+    else
+      frequency -= 97500;
+  return (unsigned int) frequency;
 }
 
-int satip_set_freq(t_satip_config* cfg,unsigned int freq)
+int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, t_mod_type modtype, unsigned int symrate, t_fec_inner fecinner)
 {
-  if ( (cfg->param_cfg & PC_FREQ) &&  cfg->frequency == freq )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_FREQ;
-  cfg->frequency = freq;
-
-  param_update_status(cfg);
-  return SATIPCFG_OK;
-}
-
-int satip_set_polarization(t_satip_config* cfg,t_polarization pol)
-{
-  if ( (cfg->param_cfg & PC_POL) &&  cfg->polarization == pol )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_POL;
+  cfg->delsys = SATIPCFG_MS_DVB_S;
+  cfg->frequency = get_sat_frequency(freq, tone);
   cfg->polarization = pol;
-
-  /*  polarization shall only trigger tuning if it was powered down explicitly */
-  if ( cfg->lnb_off==1 )
-    {
-      cfg->lnb_off = 0;
-      param_update_status(cfg); 
-    }
-
-  return SATIPCFG_OK;
-}
-
-
-int satip_lnb_off(t_satip_config* cfg)
-{
-  cfg->lnb_off = 1;
-  cfg->param_cfg &= ~PC_POL;
-  
-  cfg->status = SATIPCFG_INCOMPLETE;
-
-  return SATIPCFG_OK;
-}
-
-
-int satip_set_rolloff(t_satip_config* cfg,t_roll_off rolloff)
-{
-  if ( (cfg->param_cfg & PC_ROLLOFF) &&  cfg->roll_off == rolloff )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_ROLLOFF;
-  cfg->roll_off = rolloff;
-
-  param_update_status(cfg);
-  return SATIPCFG_OK;
-}
-
-
-
-int satip_set_modsys(t_satip_config* cfg,t_mod_sys modsys)
-{
-  if ( (cfg->param_cfg & PC_MODSYS) &&  cfg->mod_sys == modsys )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_MODSYS;
-  cfg->mod_sys = modsys;
-
-  param_update_status(cfg);
-  return SATIPCFG_OK;
-}
-
-int satip_set_modtype(t_satip_config* cfg,t_mod_type modtype)
-{
-  if ( (cfg->param_cfg & PC_MODTYPE) &&  cfg->mod_type == modtype )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_MODTYPE;
   cfg->mod_type = modtype;
-
-  param_update_status(cfg);
-  return SATIPCFG_OK;
-}
-
-
-int satip_set_pilots(t_satip_config* cfg,t_pilots pilots)
-{
-  if ( (cfg->param_cfg & PC_PILOTS) &&  cfg->pilots == pilots )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_PILOTS;
-  cfg->pilots = pilots;
-
-  param_update_status(cfg);
-  return SATIPCFG_OK;
-}
-
-int satip_set_symbol_rate(t_satip_config* cfg,unsigned int symrate)
-{
-  if ( (cfg->param_cfg & PC_SYMRATE) &&  cfg->symbol_rate == symrate )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_SYMRATE;
-  cfg->symbol_rate = symrate;
-
-  param_update_status(cfg);
-  return SATIPCFG_OK;
-}
-
-
-int satip_set_fecinner(t_satip_config* cfg, t_fec_inner fecinner)
-{
-  if ( (cfg->param_cfg & PC_FECINNER) &&  cfg->fec_inner == fecinner )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_FECINNER;
+  cfg->symbol_rate = symrate / 1000;
   cfg->fec_inner = fecinner;
+  cfg->status = SATIPCFG_CHANGED;
 
-  param_update_status(cfg);
+  DEBUG(MSG_MAIN,"DVBS  freq: %d pol: %c symrate %d fec: %s\n", cfg->frequency,
+		  chrmap_polarization[cfg->polarization],
+		  cfg->symbol_rate,
+		  strmap_fecinner[cfg->fec_inner]);
+
+  return SATIPCFG_OK;
+}
+
+int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, t_mod_type modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots)
+{
+  cfg->delsys = SATIPCFG_MS_DVB_S2;
+  cfg->frequency = get_sat_frequency(freq, tone);
+  cfg->polarization = pol;
+  cfg->mod_type = modtype;
+  cfg->symbol_rate = symrate / 1000;
+  cfg->fec_inner = fecinner;
+  cfg->roll_off = rolloff;
+  cfg->pilots = pilots;
+  cfg->status = SATIPCFG_CHANGED;
+
+  DEBUG(MSG_MAIN,"DVBS2 freq: %d pol: %c symrate %d fec: %s rolloff: %s\n", cfg->frequency,
+		  chrmap_polarization[cfg->polarization],
+		  cfg->symbol_rate,
+		  strmap_fecinner[cfg->fec_inner], strmap_rolloff[cfg->roll_off]);
+  return SATIPCFG_OK;
+}
+
+int satip_set_dvbc(t_satip_config* cfg)
+{
   return SATIPCFG_OK;
 }
 
 int satip_set_position(t_satip_config* cfg, int position)
 {
-  if ( (cfg->param_cfg & PC_POSITION) &&  cfg->position == position )
-    return SATIPCFG_OK;
-
-  cfg->param_cfg |= PC_POSITION;
   cfg->position = position;
-
-  param_update_status(cfg);
   return SATIPCFG_OK;
 }
 
@@ -400,8 +280,8 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
 		     cfg->position,
 		     frontend_str,
 		     cfg->frequency/10, cfg->frequency%10,
-		     strmap_polarization[cfg->polarization],
-		     cfg->mod_sys == SATIPCFG_MS_DVB_S ? "dvbs" : "dvbs2",
+		     chrmap_polarization[cfg->polarization],
+		     cfg->delsys == SATIPCFG_MS_DVB_S ? "dvbs" : "dvbs2",
                      cfg->mod_type == SATIPCFG_MT_QPSK ? "qpsk" : "8psk",
 		     cfg->symbol_rate,
 		     strmap_fecinner[cfg->fec_inner]);
@@ -411,7 +291,7 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
   str += printed;
 
   /* DVB-S2 additional required parameters */
-  if ( cfg->mod_sys == SATIPCFG_MS_DVB_S2 )
+  if ( cfg->delsys == SATIPCFG_MS_DVB_S2 )
     {
       printed += snprintf(str, maxlen-printed, "&ro=%s&plts=%s",
 			 strmap_rolloff[cfg->roll_off],
@@ -490,8 +370,6 @@ void satip_clear_config(t_satip_config* cfg)
   int i;
 
   cfg->status    = SATIPCFG_INCOMPLETE;
-  cfg->param_cfg = 0;
-  cfg->lnb_off = 0;
   
   for ( i=0; i<SATIPCFG_MAX_PIDS; i++)
     cfg->mod_pid[i]=PID_IGNORE;
