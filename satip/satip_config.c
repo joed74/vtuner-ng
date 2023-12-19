@@ -28,6 +28,10 @@
 #define PID_ADD    2
 #define PID_DELETE 3
 
+#ifndef SYS_DVBC2
+#define SYS_DVBC2 19
+#endif
+
 /* strings for query strings */
 char  const chrmap_polarization[] = { 'h', 'v', 'l', 'r' };
 char* const strmap_fecinner[] = { "","12","23","34","45","56","67","78","89","AUTO","35","910","25" };
