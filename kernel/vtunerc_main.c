@@ -130,10 +130,10 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	  return -EINVAL;
 	}
 
-	dprintk(ctx, "add pid %i\n", feed->pid);
-
 	/* organize PID list table */
 	if (pidtab_find_index(ctx->pidtab, feed->pid) < 0) {
+		ctx->adapter_inuse = 1;
+		dprintk(ctx, "add pid %i\n", feed->pid);
 		pidtab_add_pid(ctx, feed);
 		send_pidlist(ctx, &msg);
 	}
@@ -147,10 +147,9 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 	struct vtunerc_ctx *ctx = demux->priv;
 	struct vtuner_message msg;
 
-	dprintk(ctx, "del pid %i\n", feed->pid);
-
 	/* organize PID list table */
 	if (pidtab_find_index(ctx->pidtab, feed->pid) > -1) {
+		dprintk(ctx, "del pid %i\n", feed->pid);
 		pidtab_del_pid(ctx, feed);
 		send_pidlist(ctx, &msg);
 	}
