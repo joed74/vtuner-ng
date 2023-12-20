@@ -41,6 +41,8 @@ unsigned int dbg_mask = MSG_MAIN | MSG_NET; // MSG_DATA
 int use_syslog = 0;
 int abort_all = 0;
 
+//#define TEST_SEQUENCER 1
+
 #ifdef TEST_SEQUENCER
 
 static int cseq=0;
@@ -54,23 +56,14 @@ static void test_sequencer(void* param)
   switch (cseq)
     {
     case 1:
-      satip_set_freq(sc,118360);
-      satip_set_modsys(sc, SATIPCFG_MS_DVB_S);
-      satip_set_pilots(sc, SATIPCFG_P_OFF);
-      satip_set_fecinner(sc, SATIPCFG_F_34);
-      satip_set_polarization(sc, SATIPCFG_P_HORIZONTAL);
-      satip_set_rolloff(sc, SATIPCFG_R_0_35);
-      satip_set_symbol_rate(sc,27500);
-      satip_set_modtype(sc, SATIPCFG_MT_QPSK);
       satip_set_position(sc, 1);
-      satip_add_pid(sc, 18);
-      break;
-
-    case 200:
-      //satip_add_pid(sc, 19);
+      satip_set_dvbs(sc, 2438000, SEC_TONE_OFF, SATIPCFG_P_HORIZONTAL, QPSK, 27500000, SATIPCFG_F_34);
+      satip_add_pid(sc, 163);
+      satip_add_pid(sc, 104);
       break;
 
     case 400:
+      abort_all = 1;
       break;
 
     default: 
@@ -203,7 +196,7 @@ int main(int argc, char** argv)
 			   10,
 			   (void*)satconf);
   
-  srtp  = satip_rtp_new(0);
+  srtp  = satip_rtp_new(0, fixed_rtp_port);
   
   /* no vtuner fd*/
   poll_idx=0;
