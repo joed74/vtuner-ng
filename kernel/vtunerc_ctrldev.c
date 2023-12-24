@@ -46,6 +46,10 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 
 	len -= tailsize;
 
+	if (down_interruptible(&ctx->tswrite_sem)) {
+		return -ERESTARTSYS;
+	}
+
 	// new buffer need to be allocated ?
 	if ((ctx->kernel_buf == NULL) || (len > ctx->kernel_buf_size)) {
 		// free old buffer
@@ -62,10 +66,6 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		}
 		ctx->kernel_buf_size = len;
 		printk(KERN_INFO "vtunerc%d: allocated buffer of %zu bytes\n", ctx->idx, len);
-	}
-
-	if (down_interruptible(&ctx->tswrite_sem)) {
-		return -ERESTARTSYS;
 	}
 
 	if (copy_from_user(ctx->kernel_buf, buff, len)) {
