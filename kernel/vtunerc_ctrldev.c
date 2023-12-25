@@ -204,7 +204,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->stat_wr_data = 0;
 		ctx->stat_fi_data = 0;
 		ctx->stat_fe_data = 0;
-		memset(&ctx->signal.status,0,sizeof(struct vtuner_signal));
+		memset(&ctx->signal,0,sizeof(struct vtuner_signal));
 		ctx->fe_params.delivery_system=0; // now retune can happen
 		memset(&ctx->pusitab,0,sizeof(unsigned char)*MAX_PIDTAB_LEN);
 	}
@@ -263,6 +263,10 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 	return ret;
 }
 
+static long compat_vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
+    return vtunerc_ctrldev_ioctl(file, cmd, arg);
+}
+
 static unsigned int vtunerc_ctrldev_poll(struct file *filp, poll_table *wait)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
@@ -282,6 +286,7 @@ static unsigned int vtunerc_ctrldev_poll(struct file *filp, poll_table *wait)
 static const struct file_operations vtunerc_ctrldev_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = vtunerc_ctrldev_ioctl,
+	.compat_ioctl = compat_vtunerc_ctrldev_ioctl,
 	.write = vtunerc_ctrldev_write,
 	.read  = vtunerc_ctrldev_read,
 	.poll  = (void *) vtunerc_ctrldev_poll,

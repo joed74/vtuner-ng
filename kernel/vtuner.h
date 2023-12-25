@@ -105,9 +105,9 @@ struct vtuner_signal
 
 #define VTUNER_MAJOR		226
 
-#define VTUNER_GET_MESSAGE	_IOR(VTUNER_MAJOR, 1, struct vtuner_message *)
-#define VTUNER_SET_RESPONSE 	_IOW(VTUNER_MAJOR, 2, struct vtuner_message *)
-#define VTUNER_SET_SIGNAL	_IOW(VTUNER_MAJOR, 3, struct vtuner_signal *)
+#define VTUNER_GET_MESSAGE	_IOR(VTUNER_MAJOR, 1, struct vtuner_message)
+#define VTUNER_SET_RESPONSE 	_IOW(VTUNER_MAJOR, 2, struct vtuner_message)
+#define VTUNER_SET_SIGNAL	_IOW(VTUNER_MAJOR, 3, struct vtuner_signal)
 
 #endif
 

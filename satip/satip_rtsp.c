@@ -239,6 +239,7 @@ static int read_response(t_satip_rtsp* rtsp)
 
 static int handle_response_options(t_satip_rtsp* rtsp)
 {
+  UNUSED(rtsp);
   return SATIP_RTSP_COMPLETE;
 }
 
@@ -276,6 +277,7 @@ static int handle_response_setup(t_satip_rtsp* rtsp)
 
 static int handle_response_play(t_satip_rtsp* rtsp)
 {
+  UNUSED(rtsp);
   return SATIP_RTSP_COMPLETE;
 }
 

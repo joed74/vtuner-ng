@@ -96,6 +96,7 @@ static void enable_rt_scheduling()
 
 void hangup(int sig)
 {
+   UNUSED(sig);
    abort_all=1;
 }
 

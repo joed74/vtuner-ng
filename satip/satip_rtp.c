@@ -104,7 +104,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 		  {
 			if (nr==1) {
 				// Signal level 0-255
-				int act_ss=atoi(token);
+				unsigned short act_ss=(unsigned short) atoi(token);
 				if (act_ss!=ss) update_status=1;
 				ss=act_ss;
 			}
@@ -117,7 +117,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 			}
 			if (nr==3) {
 				// Quality (BER)
-				int act_ber=atoi(token);
+				unsigned int act_ber=(unsigned) atoi(token);
 				if (act_ber!=ber) update_status=1;
 				ber=act_ber;
 			}

@@ -22,6 +22,8 @@
 
 #include "vtuner.h"
 
+#define UNUSED(x) (void)(x)
+
 typedef enum
   {
     SATIPCFG_UNSET = -1,

@@ -45,7 +45,7 @@ void write_message(const unsigned int mtype, const int level, const char* fmt, .
     va_start(ap, fmt);
     vsnprintf(tn, sizeof(tn), fmt, ap);
     va_end(ap);
-    strncat(msg, tn, sizeof(msg));
+    strncat(msg, tn, sizeof(msg)-1);
 
     if(use_syslog) {
       int priority;
@@ -82,7 +82,7 @@ void append_message(const char* fmt, ... ) {
   vsnprintf(tn, sizeof(tn), fmt, ap);
   va_end(ap);
 
-  strncat(msg, tn, sizeof(msg));
+  strncat(msg, tn, sizeof(msg)-1);
 }  
 
 int open_udplog(char *ipaddr, int portnum) {

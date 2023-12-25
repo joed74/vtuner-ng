@@ -1,4 +1,4 @@
-CFLAGS += -Wall -g
+CFLAGS += -Wall -Wextra -g
 
 OBJ = satip_rtp.o satip_vtuner.o satip_config.o \
 	satip_rtsp.o satip_main.o polltimer.o log.o
