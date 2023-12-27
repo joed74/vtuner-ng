@@ -62,6 +62,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		ctx->kernel_buf = kmalloc(len, GFP_KERNEL);
 		if (!ctx->kernel_buf) {
 			printk(KERN_ERR "vtunerc%d: unable to allocate buffer of %zu bytes\n", ctx->idx, len);
+			up(&ctx->tswrite_sem);
 			return -ENOMEM;
 		}
 		ctx->kernel_buf_size = len;
