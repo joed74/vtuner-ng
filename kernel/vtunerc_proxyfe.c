@@ -135,19 +135,15 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		msg.type = MSG_SET_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 		memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
-	}
 
-	if (ctx->pids_changed) {
-		ctx->stat_time = ktime_get_seconds();
-		send_pidlist(ctx, &msg);
+		send_pidlist(ctx);
+		ctx->tuning = 0;
 	}
-	ctx->tuning = 0;
 	return 0;
 }
 
 static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int mode_flags, unsigned int *delay, enum fe_status *status)
 {
-	*delay=HZ/10;
 	return dvb_proxyfe_set_frontend(fe);
 }
 
@@ -174,9 +170,7 @@ static void dvb_proxyfe_detach(struct dvb_frontend *fe)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
 	dprintk(ctx, "detach\n");
-	send_pidlist(ctx, &msg);
 	ctx->adapter_inuse=0;
 }
 

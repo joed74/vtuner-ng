@@ -70,36 +70,29 @@ static int feedtab_add_feed(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (ctx->feedtab[i] == NULL) {
 			ctx->feedtab[i] = feed;
-			ctx->pids_changed = 1;
-			return 0;
+			send_pidlist(ctx);
+			return 1;
 		}
-	return -1;
+	return 0;
 }
 
-void feedtab_copy_pids_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
+void send_pidlist(struct vtunerc_ctx *ctx)
 {
+	struct vtuner_message msg;
 	int i;
 
-	for (i = 0; i < MAX_PIDTAB_LEN ; i++) {
+	dprintk(ctx,"MSG_PIDLIST");
+	for (i = 0; i< MAX_PIDTAB_LEN; i++) {
 		if (ctx->feedtab[i]!=NULL) {
-			msg->body.pidlist[i] = ctx->feedtab[i]->pid;
+			msg.body.pidlist[i] = ctx->feedtab[i]->pid;
 			dprintk_cont(ctx, " %i", ctx->feedtab[i]->pid);
-		}
-		else
-		{
-			msg->body.pidlist[i] = PID_UNKNOWN;
+		} else {
+			msg.body.pidlist[i] = PID_UNKNOWN;
 		}
 	}
 	dprintk_cont(ctx, "\n");
-}
-
-void send_pidlist(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
-{
-	dprintk(ctx,"MSG_PIDLIST");
-	feedtab_copy_pids_to_msg(ctx, msg);
-	msg->type = MSG_PIDLIST;
-	vtunerc_ctrldev_xchange_message(ctx, msg, 0);
-	ctx->pids_changed = 0;
+	msg.type = MSG_PIDLIST;
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
@@ -124,6 +117,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 
 	/* organize PID list table */
 	if (feedtab_find_pid(ctx, feed->pid) < 0) {
+		dprintk(ctx, "add pid %i%s", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 		ctx->adapter_inuse = 1;
 		feedtab_add_feed(ctx, feed);
 	}
@@ -139,8 +133,9 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 	idx = feedtab_find_pid(ctx, feed->pid);
 	if (idx > -1) {
+		dprintk(ctx, "del pid %i%s", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 		ctx->feedtab[idx] = NULL;
-		ctx->pids_changed = 1;
+		send_pidlist(ctx);
 	}
 
 	return 0;

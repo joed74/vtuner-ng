@@ -363,7 +363,7 @@ static int send_setup(t_satip_rtsp* rtsp)
   if ( printed >= remain )
     return SATIP_RTSP_ERROR;
 
-#if 0
+#if 1
   printed += satip_prepare_pids(rtsp->satip_config,buf+printed,remain-printed,0);
   if ( printed >= remain )
     return SATIP_RTSP_ERROR;

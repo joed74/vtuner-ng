@@ -62,8 +62,6 @@ struct vtunerc_ctx {
 	struct fe_params fe_params;
 
 	struct dvb_demux_feed *feedtab[MAX_PIDTAB_LEN];
-	int pids_changed;
-
 	int tuning;
 
 	struct semaphore xchange_sem;
@@ -100,7 +98,7 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid);
-void send_pidlist(struct vtunerc_ctx *ctx, struct vtuner_message *msg);
+void send_pidlist(struct vtunerc_ctx *ctx);
 #define dprintk(ctx, fmt, arg...) do {				\
 if (ctx->config && (ctx->config->debug))			\
 	printk(KERN_DEBUG "vtunerc%d: " fmt, ctx->idx, ##arg);	\
