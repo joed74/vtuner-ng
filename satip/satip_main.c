@@ -103,8 +103,8 @@ void hangup(int sig)
 void usage(char *name)
 {
   fprintf(stderr,
-     "usage: %s -h satip_receiver [-p 554] [-d /dev/vtunerc0] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port]\n"
-     "  -h\tip or hostname of satip receiver\n"
+     "usage: %s -s satip_receiver [-p 554] [-d /dev/vtunerc0] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port]\n"
+     "  -s\tip or hostname of satip receiver\n"
      "  -p\tport of satip receiver (defaults to 554)\n"
      "  -d\tvtuner device (defaults to /dev/vtunerc0)\n"
      "  -f\tfrontend on satip, number between 1 to N (defaults to let receiver decide)\n"
@@ -138,13 +138,17 @@ int main(int argc, char** argv)
   signal(SIGINT, hangup);
   signal(SIGTERM, hangup);
 
-  while((opt = getopt(argc, argv, "h:p:d:f:m:l:r:")) != -1 ) {
+  while((opt = getopt(argc, argv, "s:p:d:f:m:l:r:h::")) != -1 ) {
     switch(opt) 
       {
       case 'h': 
+	host = argv[optind];
+	break;
+
+      case 's':
 	host = optarg;
 	break;
-	
+
       case 'p': 
 	port = optarg;
 	break;
@@ -170,7 +174,6 @@ int main(int argc, char** argv)
 	break;
 
       default:
-        ERROR(MSG_MAIN,"unknown option %c\n",opt);
 	exit(1);	
       }
   }
