@@ -36,8 +36,8 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct dvb_demux *demux = &ctx->demux;
 	int tailsize = len % 188;
 	unsigned short pid;
-	int i, idx, cc, marker;
-	bool sendfiller;
+	int i, idx, cc;
+	bool sendfiller, pusi;
 
 	if (len < 188) {
 		printk(KERN_ERR "vtunerc%d: Data are shorter then TS packet size (188B)\n", ctx->idx);
@@ -83,51 +83,42 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			return -EINVAL;
 		}
 
-		sendfiller=1;
+		pusi = 0;
+		idx = -1;
 		pid = ((ctx->kernel_buf[i+1] & 0x1f)<<8)|ctx->kernel_buf[i+2];
-		if (pid!=0x1fff) ctx->signal.status = FE_HAS_LOCK; // no filler -> we have a lock!
-		idx = pidtab_find_index(ctx->pidtab, pid);
-		if (idx!=-1) {
-			marker = 0;
-			if (ctx->pusitab[idx]==0) {
-				if (ctx->kernel_buf[i+1] & 0x40) marker=1;
-				if ((ctx->kernel_buf[i+3] & 0x20) && ctx->kernel_buf[i+4]==0xB7) marker=2;
-				if (marker) {
+		if (pid==0x1fff) {
+			ctx->stat_fe_data += 188; // external filler
+		} else {
+			sendfiller=1;
+			idx = feedtab_find_pid(ctx, pid);
+			if (ctx->tuning) idx=-1;
+			if (idx > -1) {
+				if (ctx->signal.status!=FE_HAS_LOCK && ctx->feedtab[idx]->type==DMX_TYPE_TS) ctx->signal.status = FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
+				if (ctx->feedtab[idx]->pusi_seen) sendfiller=0; // pusi seen -> no filler
+				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) sendfiller=0; // packet ist already a filler
+				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->feedtab[idx]->pusi_seen)) {
 					cc = ctx->kernel_buf[i+3] & 0x0f;
-					if (marker==1) dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
-					if (marker==2) dprintk(ctx, "found filler for pid %i (cc=%i)\n", pid , cc);
+					dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
 					cc = cc - 1;
 					if (cc == -1) cc = 15;
-					ctx->pusitab[idx] = marker;
 					ctx->feedtab[idx]->cc = cc;
+					pusi = 1;
+					sendfiller=0;
 				}
 			}
-			if (ctx->pusitab[idx]==2 && ctx->kernel_buf[i+1] & 0x40) {
-				ctx->pusitab[idx]=1;
-				cc = ctx->kernel_buf[i+3] & 0x0f;
-				dprintk(ctx, "found pusi later for pid %i (cc=%i)\n", pid, cc);
-			}
-			if (ctx->pusitab[idx]!=0) sendfiller=0;
-		} else {
-			if (pid!=0x1fff) {
-				dprintk(ctx, "pid %i not found in pidtab\n", pid);
-			} else {
-				sendfiller=0;
+
+			if (sendfiller) {
+				ctx->kernel_buf[i+1]=0x1F; // pid 0x1FFF
+				ctx->kernel_buf[i+2]=0xFF;
+				ctx->kernel_buf[i+3]=0x20; // only adaption
+				ctx->kernel_buf[i+4]=0xB7; // adaption field length (whole packet)
+				ctx->kernel_buf[i+5]=0x00; // adaption fileds (none)
+				memset(&ctx->kernel_buf[i+6],0xff,182);
+				ctx->stat_fi_data += 188;
 			}
 		}
-
-		if (sendfiller) {
-			ctx->kernel_buf[i+1]=0x1F; // pid 0x1FFF
-			ctx->kernel_buf[i+2]=0xFF;
-			ctx->kernel_buf[i+3]=0x20; // only adaption
-			ctx->kernel_buf[i+4]=0xB7; // adaption field length (whole packet)
-			ctx->kernel_buf[i+5]=0x00; // adaption fileds (none)
-			memset(&ctx->kernel_buf[i+6],0xff,182);
-			ctx->stat_fi_data += 188;
-		}
-
-		if (pid==0x1fff) ctx->stat_fe_data += 188;
 		dvb_dmx_swfilter_packets(demux, &ctx->kernel_buf[i], 1);
+		if (idx > -1 && pusi) ctx->feedtab[idx]->pusi_seen=1;
 	}
 
 	ctx->stat_wr_data += len;
@@ -185,7 +176,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	int minor;
-	// int i;
+	int i;
 
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
@@ -206,7 +197,8 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->stat_fe_data = 0;
 		memset(&ctx->signal,0,sizeof(struct vtuner_signal));
 		ctx->fe_params.delivery_system=0; // now retune can happen
-		memset(&ctx->pusitab,0,sizeof(unsigned char)*MAX_PIDTAB_LEN);
+		for (i=0; i<MAX_PIDTAB_LEN; i++)
+			if (ctx->feedtab[i]!=NULL) ctx->feedtab[i]->pusi_seen=false;
 	}
 	return 0;
 }

@@ -52,68 +52,60 @@ static struct vtunerc_config config = {
 	.debug = 0
 };
 
-int pidtab_find_index(unsigned short *pidtab, int pid)
+int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
 {
 	int i = 0;
 
 	while (i < MAX_PIDTAB_LEN) {
-		if (pidtab[i] == pid)
-			return i;
+		if (ctx->feedtab[i] != NULL && ctx->feedtab[i]->pid == pid) return i;
 		i++;
 	}
 
 	return -1;
 }
 
-static int pidtab_add_pid(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
+static int feedtab_add_feed(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
 {
 	int i;
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-		if (ctx->pidtab[i] == PID_UNKNOWN) {
-			ctx->pidtab[i] = feed->pid;
-			ctx->pusitab[i] = 0;
+		if (ctx->feedtab[i] == NULL) {
 			ctx->feedtab[i] = feed;
+			ctx->pids_changed = 1;
 			return 0;
 		}
 	return -1;
 }
 
-static int pidtab_del_pid(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
+void feedtab_copy_pids_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
 {
 	int i;
-	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-		if (ctx->pidtab[i] == feed->pid) {
-			ctx->pidtab[i] = PID_UNKNOWN;
-			ctx->pusitab[i] = 0;
-			ctx->feedtab[i] = NULL;
-			return 0;
+
+	for (i = 0; i < MAX_PIDTAB_LEN ; i++) {
+		if (ctx->feedtab[i]!=NULL) {
+			msg->body.pidlist[i] = ctx->feedtab[i]->pid;
+			dprintk_cont(ctx, " %i", ctx->feedtab[i]->pid);
 		}
-
-	return -1;
-}
-
-void pidtab_copy_to_msg(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
-{
-	int i;
-
-	for (i = 0; i < MAX_PIDTAB_LEN ; i++)
-		msg->body.pidlist[i] = ctx->pidtab[i];
+		else
+		{
+			msg->body.pidlist[i] = PID_UNKNOWN;
+		}
+	}
+	dprintk_cont(ctx, "\n");
 }
 
 void send_pidlist(struct vtunerc_ctx *ctx, struct vtuner_message *msg)
 {
-	if (ctx->fe_params.delivery_system==0) return;
-	dprintk(ctx,"MSG_PIDLIST\n");
-	pidtab_copy_to_msg(ctx, msg);
+	dprintk(ctx,"MSG_PIDLIST");
+	feedtab_copy_pids_to_msg(ctx, msg);
 	msg->type = MSG_PIDLIST;
 	vtunerc_ctrldev_xchange_message(ctx, msg, 0);
+	ctx->pids_changed = 0;
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
-	struct vtuner_message msg;
 
 	switch (feed->type) {
 	case DMX_TYPE_TS:
@@ -131,11 +123,9 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	}
 
 	/* organize PID list table */
-	if (pidtab_find_index(ctx->pidtab, feed->pid) < 0) {
+	if (feedtab_find_pid(ctx, feed->pid) < 0) {
 		ctx->adapter_inuse = 1;
-		dprintk(ctx, "add pid %i\n", feed->pid);
-		pidtab_add_pid(ctx, feed);
-		send_pidlist(ctx, &msg);
+		feedtab_add_feed(ctx, feed);
 	}
 
 	return 0;
@@ -145,13 +135,12 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
-	struct vtuner_message msg;
+	int idx;
 
-	/* organize PID list table */
-	if (pidtab_find_index(ctx->pidtab, feed->pid) > -1) {
-		dprintk(ctx, "del pid %i\n", feed->pid);
-		pidtab_del_pid(ctx, feed);
-		send_pidlist(ctx, &msg);
+	idx = feedtab_find_pid(ctx, feed->pid);
+	if (idx > -1) {
+		ctx->feedtab[idx] = NULL;
+		ctx->pids_changed = 1;
 	}
 
 	return 0;
@@ -384,6 +373,32 @@ static void inversion2str(struct seq_file *seq, enum fe_spectral_inversion inver
 	seq_puts(seq, "\n");
 }
 
+static void sectiontable2str(struct seq_file *seq, unsigned short pid)
+{
+	switch (pid) {
+		case 0:
+		  seq_puts(seq, " PAT");
+		  break;
+		case 16:
+		  seq_puts(seq, " NIT");
+		  break;
+		case 17:
+		  seq_puts(seq, " SDT");
+		  break;
+		case 18:
+		  seq_puts(seq, " EIT");
+		  break;
+		case 19:
+		  seq_puts(seq, " RST");
+		  break;
+		case 20:
+		  seq_puts(seq, " TDT");
+		  break;
+		default:
+		  seq_printf(seq, " %is", pid);
+	}
+}
+
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
 	int i, pcnt = 0;
@@ -415,10 +430,13 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			}
 			seq_printf(seq, " pid tab          :");
 			for (i = 0; i < MAX_PIDTAB_LEN; i++)
-				if (ctx->pidtab[i] != PID_UNKNOWN) {
-					seq_printf(seq, " %i", ctx->pidtab[i]);
-					if (ctx->pusitab[i]==1) seq_printf(seq, "*");
-					if (ctx->pusitab[i]==2) seq_printf(seq, "-");
+				if (ctx->feedtab[i] != NULL) {
+					if (ctx->feedtab[i]->type==DMX_TYPE_SEC) {
+						sectiontable2str(seq, ctx->feedtab[i]->pid);
+					} else {
+						seq_printf(seq, " %i", ctx->feedtab[i]->pid);
+					}
+					if (ctx->feedtab[i]->pusi_seen) seq_printf(seq, "*");
 					pcnt++;
 				}
 			seq_printf(seq, " (len=%d)\n", pcnt);
@@ -492,7 +510,7 @@ static int __init vtunerc_init(void)
 	struct vtunerc_ctx *ctx = NULL;
 	struct dvb_demux *dvbdemux;
 	struct dmx_demux *dmx;
-	int ret = -EINVAL, i, idx;
+	int ret = -EINVAL, idx;
 
 	printk(KERN_INFO "virtual DVB adapter driver, version " VTUNERC_MODULE_VERSION ", (c) 2021 Honza Petrous, SmartImp.cz\n");
 
@@ -569,10 +587,6 @@ static int __init vtunerc_init(void)
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
 		sema_init(&ctx->tswrite_sem, 1);
-
-		/* init pid table */
-		for (i = 0; i < MAX_PIDTAB_LEN; i++)
-			ctx->pidtab[i] = PID_UNKNOWN;
 
 #ifdef CONFIG_PROC_FS
 		{

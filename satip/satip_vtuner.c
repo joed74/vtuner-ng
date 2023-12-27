@@ -33,10 +33,6 @@
 #include "satip_vtuner.h"
 #include "log.h"
 
-/* from vtunerc_priv.h */
-#define MAX_PIDTAB_LEN 30
-#define PID_UNKNOWN 0x0FFFF
-
 /* fixme: align with driver */
 typedef unsigned int   u32;
 typedef signed int     s32;
@@ -209,6 +205,7 @@ void satip_vtuner_event(struct satip_vtuner* vt)
   switch(msg.type)
     {
     case MSG_SET_FRONTEND:
+      satip_del_allpid(vt->satip_cfg);
       set_frontend(vt,&msg);
       break;
 

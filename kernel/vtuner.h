@@ -26,6 +26,8 @@
 
 #define MAX_PIDTAB_LEN			30
 
+#define PID_UNKNOWN 0xffff
+
 #ifndef u32
 typedef unsigned int u32;
 #endif

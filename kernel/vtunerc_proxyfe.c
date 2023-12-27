@@ -80,63 +80,12 @@ static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 	return 0;
 }
 
-/*
-static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe, struct dtv_frontend_properties *c)
-{
-	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *ctx = state->ctx;
-	struct vtuner_message msg;
-
-	msg.type = MSG_GET_FRONTEND;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-
-	switch (ctx->vtype) {
-	case VT_S:
-	case VT_S2:
-		{
-			c->symbol_rate = msg.body.fe_params.u.qpsk.symbol_rate;
-			c->fec_inner = msg.body.fe_params.u.qpsk.fec_inner;
-			c->modulation = msg.body.fe_params.u.qpsk.modulation;
-			c->pilot = msg.body.fe_params.u.qpsk.pilot;
-			c->rolloff = msg.body.fe_params.u.qpsk.rolloff;
-			c->delivery_system = msg.body.fe_params.u.qpsk.delivery_system;
-		}
-		break;
-	case VT_T:
-		{
-			c->bandwidth_hz = msg.body.fe_params.u.ofdm.bandwidth;
-			c->code_rate_HP = msg.body.fe_params.u.ofdm.code_rate_HP;
-			c->code_rate_LP = msg.body.fe_params.u.ofdm.code_rate_LP;
-			c->modulation = msg.body.fe_params.u.ofdm.constellation;
-			c->transmission_mode = msg.body.fe_params.u.ofdm.transmission_mode;
-			c->guard_interval = msg.body.fe_params.u.ofdm.guard_interval;
-			c->hierarchy = msg.body.fe_params.u.ofdm.hierarchy_information;
-		}
-		break;
-	case VT_C:
-		{
-			c->symbol_rate = msg.body.fe_params.u.qam.symbol_rate;
-			c->fec_inner = msg.body.fe_params.u.qam.fec_inner;
-			c->modulation = msg.body.fe_params.u.qam.modulation;
-		}
-		break;
-	default:
-		printk(KERN_ERR "vtunerc%d: unregognized tuner vtype = %d\n", ctx->idx, ctx->vtype);
-		return -EINVAL;
-	}
-	c->frequency = msg.body.fe_params.frequency;
-	c->inversion = msg.body.fe_params.inversion;
-	return 0;
-}
-*/
-
 static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 {
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
-	int i, pcnt = 0;
 
 	if (ctx->fd_opened < 1) return -EAGAIN;
 	if (c->frequency == 0) return -EINVAL;
@@ -175,26 +124,30 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		return -EINVAL;
 	}
 
-	if (memcmp(&msg.body.fe_params, &ctx->fe_params, sizeof(struct fe_params))==0) return 0; // no change
+	if (memcmp(&msg.body.fe_params, &ctx->fe_params, sizeof(struct fe_params))!=0) {
 
-	ctx->stat_time = ktime_get_seconds();
-	ctx->signal.status = FE_NONE;
+		ctx->stat_time = ktime_get_seconds();
+		ctx->signal.status = FE_NONE;
+		ctx->tuning = 1;
 
-	dprintk(ctx, "MSG_SET_FRONTEND\n");
+		dprintk(ctx, "MSG_SET_FRONTEND\n");
 
-	msg.type = MSG_SET_FRONTEND;
-	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-	memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
+		msg.type = MSG_SET_FRONTEND;
+		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
+		memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
+	}
 
-	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-	   if (ctx->pidtab[i] != PID_UNKNOWN) pcnt++;
-
-	if (pcnt>0) send_pidlist(ctx, &msg);
+	if (ctx->pids_changed) {
+		ctx->stat_time = ktime_get_seconds();
+		send_pidlist(ctx, &msg);
+	}
+	ctx->tuning = 0;
 	return 0;
 }
 
 static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int mode_flags, unsigned int *delay, enum fe_status *status)
 {
+	*delay=HZ/10;
 	return dvb_proxyfe_set_frontend(fe);
 }
 
@@ -221,7 +174,9 @@ static void dvb_proxyfe_detach(struct dvb_frontend *fe)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
+	struct vtuner_message msg;
 	dprintk(ctx, "detach\n");
+	send_pidlist(ctx, &msg);
 	ctx->adapter_inuse=0;
 }
 
