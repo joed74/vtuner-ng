@@ -148,32 +148,15 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 static void status2str(struct seq_file *seq, u8 status)
 {
-	seq_puts(seq, " status           : ");
-	switch (status) {
-		case FE_HAS_SIGNAL:
-		  seq_puts(seq, "FE_HAS_SIGNAL");
-		  break;
-		case FE_HAS_CARRIER:
-		  seq_puts(seq, "FE_HAS_CARRIER");
-		  break;
-		case FE_HAS_VITERBI:
-		  seq_puts(seq, "FE_HAS_VITERBI");
-		  break;
-		case FE_HAS_SYNC:
-		  seq_puts(seq, "FE_HAS_SYNC");
-		  break;
-		case FE_HAS_LOCK:
-		  seq_puts(seq, "FE_HAS_LOCK");
-		  break;
-		case FE_TIMEDOUT:
-		  seq_puts(seq, "FE_TIMEDOUT");
-		  break;
-		case FE_REINIT:
-		  seq_puts(seq, "FE_REINIT");
-		  break;
-		default:
-		  seq_puts(seq, "FE_NONE");
-	}
+	seq_puts(seq, " status           :");
+	if (status == 0) seq_puts(seq," NONE");
+	if (status & FE_HAS_SIGNAL) seq_puts(seq, " SIGNAL");
+	if (status & FE_HAS_CARRIER) seq_puts(seq, " CARRIER");
+	if (status & FE_HAS_VITERBI) seq_puts(seq, " VITERBI");
+	if (status & FE_HAS_SYNC) seq_puts(seq, " SYNC");
+	if (status & FE_HAS_LOCK) seq_puts(seq, " LOCK");
+	if (status & FE_TIMEDOUT) seq_puts(seq, " TIMEDOUT");
+	if (status & FE_REINIT) seq_puts(seq, " REINIT");
 	seq_puts(seq, "\n");
 }
 

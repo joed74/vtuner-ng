@@ -111,7 +111,7 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 			if (nr==2) {
 				// Fronend lock
 				unsigned char act_status=FE_HAS_SIGNAL;
-				if (token[0]=='1') act_status=FE_HAS_LOCK;
+				if (token[0]=='1') act_status = (FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK);
 				if (act_status!=status) update_status=1;
 				status=act_status;
 			}

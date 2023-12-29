@@ -94,7 +94,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			idx = feedtab_find_pid(ctx, pid);
 			if (ctx->tuning) idx=-1;
 			if (idx > -1) {
-				if (ctx->signal.status!=FE_HAS_LOCK && ctx->feedtab[idx]->type==DMX_TYPE_TS) ctx->signal.status = FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
+				if (!(ctx->signal.status & FE_HAS_LOCK) && ctx->feedtab[idx]->type==DMX_TYPE_TS) ctx->signal.status |= FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
 				if (ctx->feedtab[idx]->pusi_seen) sendfiller=0; // pusi seen -> no filler
 				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) sendfiller=0; // packet ist already a filler
 				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->feedtab[idx]->pusi_seen)) {
