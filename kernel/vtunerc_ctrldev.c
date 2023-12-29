@@ -40,7 +40,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	bool sendfiller, pusi;
 
 	if (len < 188) {
-		printk(KERN_ERR "vtunerc%d: Data are shorter then TS packet size (188B)\n", ctx->idx);
+		printk(KERN_ERR "vtunerc%d: Data is shorter then TS packet size (%lu < 188)\n", ctx->idx, len);
 		return -EINVAL;
 	}
 
@@ -218,6 +218,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		if (copy_from_user(&ctx->signal, (char *)arg, VTUNER_SIG_LEN)) {
 			ret = -EFAULT;
 		}
+		dvb_proxyfe_set_signal(ctx);
 		break;
 
 	case VTUNER_GET_MESSAGE:

@@ -28,6 +28,14 @@
 
 #define PID_UNKNOWN 0xffff
 
+#ifndef u64
+typedef unsigned long long u64;
+#endif
+
+#ifndef s64
+typedef long long s64;
+#endif
+
 #ifndef u32
 typedef unsigned int u32;
 #endif
@@ -47,14 +55,14 @@ typedef unsigned char u8;
 struct diseqc_master_cmd {
 	u8 msg[6];
 	u8 msg_len;
-};
+} __attribute__ ((packed));
 
 struct sat_params {
 	u8	tone;
 	u8	voltage;
 	struct	diseqc_master_cmd diseqc_master_cmd;
 	u8	burst;
-};
+} __attribute__ ((packed));
 
 struct fe_params {
 	u32	delivery_system;
@@ -86,7 +94,7 @@ struct fe_params {
 			u32	hierarchy_information;
 		} ofdm;
 	} u;
-};
+} __attribute__ ((packed));
 
 struct vtuner_message {
 	s32 type;
@@ -94,16 +102,41 @@ struct vtuner_message {
 		struct fe_params fe_params;
 		u16 pidlist[MAX_PIDTAB_LEN];
 	} body;
+} __attribute__ ((packed));
+
+#define VTUNER_MAX_DTV_STATS 4
+
+enum vtuner_scale_params {
+	VT_SCALE_NOT_AVAILABLE = 0,
+	VT_SCALE_DECIBEL,
+	VT_SCALE_RELATIVE,
+	VT_SCALE_COUNTER
 };
 
-struct vtuner_signal
-{
+struct vtuner_dtv_stats {
+	u8 scale;
+	union {
+		u64 uvalue;
+		s64 svalue;
+	} u;
+} __attribute__ ((packed));
+
+struct vtuner_dtv_fe_stats {
+	u8 len;
+	struct vtuner_dtv_stats stat[MAX_DTV_STATS];
+} __attribute__ ((packed));
+
+struct vtuner_signal {
 	u8 status;
-	u32 ber;
-	u16 ss;
-	u16 snr;
-	u32 ucb;
-};
+	struct vtuner_dtv_fe_stats strength;
+	struct vtuner_dtv_fe_stats cnr;
+	struct vtuner_dtv_fe_stats pre_bit_error;
+	struct vtuner_dtv_fe_stats pre_bit_count;
+	struct vtuner_dtv_fe_stats post_bit_error;
+	struct vtuner_dtv_fe_stats post_bit_count;
+	struct vtuner_dtv_fe_stats block_error;
+	struct vtuner_dtv_fe_stats block_count;
+} __attribute__ ((packed));
 
 #define VTUNER_MAJOR		226
 

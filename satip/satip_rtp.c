@@ -35,6 +35,14 @@
 
 #include "vtuner.h"
 
+typedef struct satip_rtp_last
+{
+  int signallevel;
+  int quality;
+  int freq;
+  int status;
+} t_satip_rtp_last;
+
 typedef struct satip_rtp
 {
   int fd;
@@ -42,22 +50,32 @@ typedef struct satip_rtp
   int rtp_socket;
   int rtcp_port;
   int rtcp_socket;
+  t_satip_rtp_last last;
   pthread_t thread;
 } t_satip_rtp;
 
 
-static void set_status(int fd, unsigned char status, unsigned short ss, unsigned int ber)
+static void set_status(int fd, unsigned char status, int signallevel, int quality)
 {
 	struct vtuner_signal sig;
+	memset(&sig,0,sizeof(struct vtuner_signal));
 	sig.status = status;
-	sig.ss = ss*255;
-	sig.ber = ber*255;
-	sig.snr = 0;
-	sig.ucb = 0;
+	sig.strength.len = 2;
+	sig.strength.stat[0].scale = VT_SCALE_DECIBEL;
+	sig.strength.stat[0].u.svalue = (signallevel >= 0) ? 40.0 * (signallevel - 32)/ 192 - 65 : 0;
+	sig.strength.stat[1].scale = VT_SCALE_RELATIVE;
+	// signallevel 0-255, range 0-65535	
+	sig.strength.stat[1].u.uvalue = signallevel * 257;
+
+	sig.cnr.len = 1;
+	sig.cnr.stat[0].scale = VT_SCALE_RELATIVE;
+	// quality 15-0, range 0-65535
+	sig.cnr.stat[0].u.uvalue = (quality >= 0) ? (quality * 65535 / 15) : 0; 
+	
 	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
 }
 
-static void rtp_data(int fd, unsigned char* buffer,int rx)
+static void rtp_data(int fd, t_satip_rtp_last *last, unsigned char* buffer, int rx)
 {
   int done=0;
   uint32_t* buf=(uint32_t*) buffer;
@@ -65,11 +83,6 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
   int plen;
   int pt;
   char infobuf[200];
-
-  unsigned int ber;
-  unsigned short ss;
-  unsigned char status;
-  int freq;
 
   int update_status=0;
 
@@ -103,29 +116,29 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 		  while ((token = strtok_r(rest, ",", &rest)))
 		  {
 			if (nr==1) {
-				// Signal level 0-255
-				unsigned short act_ss=(unsigned short) atoi(token);
-				if (act_ss!=ss) update_status=1;
-				ss=act_ss;
+				// Signal level (0-255)
+				int act_signallevel=atoi(token);
+				if (act_signallevel!=last->signallevel) update_status=1;
+				last->signallevel=act_signallevel;
 			}
 			if (nr==2) {
 				// Fronend lock
 				unsigned char act_status=FE_HAS_SIGNAL;
 				if (token[0]=='1') act_status = (FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK);
-				if (act_status!=status) update_status=1;
-				status=act_status;
+				if (act_status!=last->status) update_status=1;
+				last->status=act_status;
 			}
 			if (nr==3) {
-				// Quality (BER)
-				unsigned int act_ber=(unsigned) atoi(token);
-				if (act_ber!=ber) update_status=1;
-				ber=act_ber;
+				// Quality (0-15)
+				int act_quality=atoi(token);
+				if (act_quality!=last->quality) update_status=1;
+				last->quality=act_quality;
 			}
 			if (nr==4) {
 				// frequency
 				int act_freq=atoi(token);
-				if (act_freq!=freq) update_status=1;
-				freq=act_freq;
+				if (act_freq!=last->freq) update_status=1;
+				last->freq=act_freq;
 			}
 			nr++;
 		  }
@@ -139,8 +152,8 @@ static void rtp_data(int fd, unsigned char* buffer,int rx)
 	}
 
       if (update_status) {
-	      DEBUG(MSG_MAIN,"RTCP: update status=%i ss=%i ber=%i\n",status,ss,ber);
-	      set_status(fd, status, ss, ber);
+	      DEBUG(MSG_NET,"RTCP: update status=%i signallevel=%i quality=%i\n",last->status,last->signallevel,last->quality);
+	      set_status(fd, last->status, last->signallevel, last->quality);
 	      update_status=0;
       }
 
@@ -211,7 +224,7 @@ static void* rtp_receiver(void* param)
 	  pollfds[1].revents = 0;
 
 	  rx=recv(pollfds[1].fd, rxbuf, 32768,0);
-	  rtp_data(srtp->fd, rxbuf,rx);
+	  rtp_data(srtp->fd, &srtp->last, rxbuf,rx);
 	  DEBUG(MSG_DATA,"RTCP: rd %d\n",rx);
 	}
 
@@ -306,6 +319,11 @@ t_satip_rtp*  satip_rtp_new(int fd, int fixed_rtp_port)
   srtp->rtp_socket  = rtp_sock;
   srtp->rtcp_port   = rtcp_port;
   srtp->rtcp_socket = rtcp_sock;
+
+  srtp->last.signallevel = 0;
+  srtp->last.quality = 0;
+  srtp->last.freq = 0;
+  srtp->last.status = 0;
 
   pthread_create( &srtp->thread, NULL, rtp_receiver, srtp);
 

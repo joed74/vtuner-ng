@@ -35,6 +35,37 @@ struct dvb_proxyfe_state {
 	struct vtunerc_ctx *ctx;
 };
 
+void dvb_proxyfe_set_stat(struct vtuner_dtv_fe_stats *vtuner_stats, struct dtv_fe_stats *dvb_stats)
+{
+	int i;
+	if (vtuner_stats->len > MAX_DTV_STATS) vtuner_stats->len=MAX_DTV_STATS;
+	dvb_stats->len = vtuner_stats->len;
+	for (i=0; i < vtuner_stats->len; i++) {
+		dvb_stats->stat[i].scale = vtuner_stats->stat[i].scale;
+		if (dvb_stats->stat[i].scale == FE_SCALE_DECIBEL) {
+			dvb_stats->stat[i].svalue = vtuner_stats->stat[i].u.svalue;
+		} else {
+			dvb_stats->stat[i].uvalue = vtuner_stats->stat[i].u.uvalue;
+		}
+	}
+}
+
+void dvb_proxyfe_set_signal(struct vtunerc_ctx *ctx)
+{
+	struct dvb_frontend *fe = ctx ? ctx->fe : NULL;
+	struct dtv_frontend_properties *c = fe ? &fe->dtv_property_cache : NULL;
+	if (!c) return;
+
+	dvb_proxyfe_set_stat(&ctx->signal.strength, &c->strength);
+	dvb_proxyfe_set_stat(&ctx->signal.cnr, &c->cnr);
+	dvb_proxyfe_set_stat(&ctx->signal.pre_bit_error, &c->pre_bit_error);
+	dvb_proxyfe_set_stat(&ctx->signal.pre_bit_count, &c->pre_bit_count);
+	dvb_proxyfe_set_stat(&ctx->signal.post_bit_error, &c->post_bit_error);
+	dvb_proxyfe_set_stat(&ctx->signal.post_bit_count, &c->post_bit_count);
+	dvb_proxyfe_set_stat(&ctx->signal.block_error, &c->block_error);
+	dvb_proxyfe_set_stat(&ctx->signal.block_count, &c->block_count);
+}
+
 static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *status)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
@@ -46,37 +77,49 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *stat
 
 static int dvb_proxyfe_read_ber(struct dvb_frontend *fe, u32 *ber)
 {
-	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *ctx = state->ctx;
+	//struct dvb_proxyfe_state *state = fe->demodulator_priv;
+	//struct vtunerc_ctx *ctx = state->ctx;
 
-	*ber = ctx->signal.ber;
+	*ber = 0;
 	return 0;
 }
 
 static int dvb_proxyfe_read_signal_strength(struct dvb_frontend *fe, u16 *strength)
 {
+	int i;
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 
-	*strength = ctx->signal.ss;
+	*strength=0;
+	for (i=0; i<ctx->signal.strength.len; i++) {
+		if (ctx->signal.strength.stat[i].scale == FE_SCALE_RELATIVE) {
+			*strength = ctx->signal.strength.stat[i].u.uvalue;
+		}
+	}
 	return 0;
 }
 
 static int dvb_proxyfe_read_snr(struct dvb_frontend *fe, u16 *snr)
 {
+	int i;
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 
-	*snr = ctx->signal.snr;
+	*snr=0;
+	for (i=0; i<ctx->signal.cnr.len; i++) {
+		if (ctx->signal.cnr.stat[i].scale == FE_SCALE_RELATIVE) {
+			*snr = ctx->signal.cnr.stat[i].u.uvalue;
+		}
+	}
 	return 0;
 }
 
 static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 {
-	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *ctx = state->ctx;
+	//struct dvb_proxyfe_state *state = fe->demodulator_priv;
+	//struct vtunerc_ctx *ctx = state->ctx;
 
-	*ucblocks = ctx->signal.ucb;
+	*ucblocks = 0;
 	return 0;
 }
 
@@ -270,10 +313,11 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 	.tune = dvb_proxyfe_tune,
 
 	.read_status = dvb_proxyfe_read_status,
-	.read_ber = dvb_proxyfe_read_ber,
-	.read_signal_strength = dvb_proxyfe_read_signal_strength,
-	.read_snr = dvb_proxyfe_read_snr,
-	.read_ucblocks = dvb_proxyfe_read_ucblocks,
+        .read_ber = dvb_proxyfe_read_ber,
+        .read_signal_strength = dvb_proxyfe_read_signal_strength,
+        .read_snr = dvb_proxyfe_read_snr,
+        .read_ucblocks = dvb_proxyfe_read_ucblocks,
+
 
 	.set_voltage = dvb_proxyfe_set_voltage,
 	.set_tone = dvb_proxyfe_set_tone,

@@ -190,20 +190,19 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
   int i;
-  u16* pidlist=msg->body.pidlist;
 
   satip_del_allpid(vt->satip_cfg);
 
   int hdr=0;
   for (i=0; i<MAX_PIDTAB_LEN; i++)
-    if (pidlist[i] < 8192  )
+    if (msg->body.pidlist[i] < 8192  )
       {
-        if (satip_add_pid(vt->satip_cfg,pidlist[i])==SATIPCFG_OK) {
+        if (satip_add_pid(vt->satip_cfg,msg->body.pidlist[i])==SATIPCFG_OK) {
 	  if (!hdr) {
 	    DEBUG(MSG_MAIN,"MSG_SET_PIDLIST:\n");
 	    hdr=1;
 	  }
-	  DEBUG(MSG_MAIN,"%d\n",pidlist[i]);
+	  DEBUG(MSG_MAIN,"%d\n",msg->body.pidlist[i]);
 	}
       }
 }
