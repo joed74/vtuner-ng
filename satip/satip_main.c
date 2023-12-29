@@ -40,26 +40,40 @@ int dbg_level = MSG_ERROR;
 unsigned int dbg_mask = MSG_MAIN | MSG_NET; // MSG_DATA
 int use_syslog = 0;
 int abort_all = 0;
+int test_sequencer = 0;
+int test_counter = 0;
 
-//#define TEST_SEQUENCER 1
+#define TEST_DVBS2 1
 
-#ifdef TEST_SEQUENCER
-
-static int cseq=0;
-
-static void test_sequencer(void* param)
+static void test_sequencer_loop(void* param)
 {
   t_satip_config* sc=(t_satip_config*)param;
 
-  cseq++;
+  test_counter++;
   
-  switch (cseq)
+  switch (test_counter)
     {
     case 1:
       satip_set_position(sc, 1);
-      satip_set_dvbs(sc, 2438000, SEC_TONE_OFF, SATIPCFG_P_HORIZONTAL, QPSK, 27500000, SATIPCFG_F_34);
+      satip_add_default_pids(sc);
+
+#ifdef TEST_DVBS
+      satip_set_dvbs(sc, 12188, SATIPCFG_P_HORIZONTAL, QPSK, 27500, SATIPCFG_F_34); // RTL
       satip_add_pid(sc, 163);
       satip_add_pid(sc, 104);
+      satip_add_pid(sc, 106);
+      satip_add_pid(sc, 110);
+#endif
+
+#ifdef TEST_DVBS2
+      satip_set_dvbs2(sc, 11493, SATIPCFG_P_HORIZONTAL, PSK_8, 22000, SATIPCFG_F_23, SATIPCFG_R_0_35, SATIPCFG_P_AUTO); // Das Erste HD
+      satip_add_pid(sc, 5101);
+      satip_add_pid(sc, 5102);
+      satip_add_pid(sc, 5103);
+      satip_add_pid(sc, 5107);
+      satip_add_pid(sc, 5106);
+      satip_add_pid(sc, 5105);
+#endif
       break;
 
     case 400:
@@ -71,9 +85,6 @@ static void test_sequencer(void* param)
       
     }
 }
-
-#endif
-
 
 static void enable_rt_scheduling()
 {
@@ -111,6 +122,7 @@ void usage(char *name)
      "  -l\tloglevel: 1 = error, 2 = warnings, 3 = info, 4 = debug (defaults to error)\n"
      "  -m\tmask for logs: 1 = main, 2 = net, 4 = data, 7 = all (defaults to main + net)\n"
      "  -r\tfixed rtp port (e.g. 45200)\n"
+     "  -T\ttest mode without vtuner, ts packets gets written to stdout!!\n"
      ,name
      );
 }
@@ -138,7 +150,7 @@ int main(int argc, char** argv)
   signal(SIGINT, hangup);
   signal(SIGTERM, hangup);
 
-  while((opt = getopt(argc, argv, "s:p:d:f:m:l:r:h::")) != -1 ) {
+  while((opt = getopt(argc, argv, "s:Tp:d:f:m:l:r:h::")) != -1 ) {
     switch(opt) 
       {
       case 'h': 
@@ -173,6 +185,10 @@ int main(int argc, char** argv)
 	fixed_rtp_port = atoi(optarg);
 	break;
 
+      case 'T':
+	test_sequencer = 1;
+        break;
+
       default:
 	exit(1);	
       }
@@ -188,40 +204,39 @@ int main(int argc, char** argv)
 
   satconf = satip_new_config(frontend);
 
-#ifdef TEST_SEQUENCER
+  if (test_sequencer) {
 
-  struct polltimer_periodic* periodic;
+    struct polltimer_periodic* periodic;
 
-  device = device; 
-  satvt = NULL;
-  polltimer_periodic_start(&timerq, 
+    device = device;
+    satvt = NULL;
+    polltimer_periodic_start(&timerq,
 			   &periodic,
-			   test_sequencer,
+			   test_sequencer_loop,
 			   10,
 			   (void*)satconf);
   
-  srtp  = satip_rtp_new(0, fixed_rtp_port);
+    srtp  = satip_rtp_new(1, fixed_rtp_port);
   
-  /* no vtuner fd*/
-  poll_idx=0;
+    /* no vtuner fd*/
+    poll_idx=0;
 
-#else
+  } else {
 
-  satvt = satip_vtuner_new( device, satconf );
+    satvt = satip_vtuner_new( device, satconf );
   
-  if ( satvt == NULL )
-    {
-      fprintf(stderr,"cannot open %s\n", device);
-      exit(1);
-    }
+    if ( satvt == NULL )
+      {
+        fprintf(stderr,"cannot open %s\n", device);
+        exit(1);
+      }
 
-  srtp  = satip_rtp_new(satip_vtuner_fd(satvt), fixed_rtp_port);
+    srtp  = satip_rtp_new(satip_vtuner_fd(satvt), fixed_rtp_port);
 
-  pollfds[0].fd=satip_vtuner_fd(satvt);
-  pollfds[0].events = POLLPRI;
-  poll_idx=1;
-
-#endif
+    pollfds[0].fd=satip_vtuner_fd(satvt);
+    pollfds[0].events = POLLPRI;
+    poll_idx=1;
+  }
 
   srtsp = satip_rtsp_new(satconf,&timerq, host, port,
 			 satip_rtp_port(srtp));

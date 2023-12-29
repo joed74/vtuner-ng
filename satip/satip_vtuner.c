@@ -137,36 +137,49 @@ static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_me
   return ret;
 }
 
+unsigned int get_sat_frequency(unsigned int freq, unsigned char tone)
+{
+  int frequency = (int) (freq / 100);
+  if (tone == SEC_TONE_ON)
+    frequency += 106000;
+  else
+    if (frequency - 97500 < 0)
+      frequency += 97500;
+    else
+      frequency -= 97500;
+  return (unsigned int) frequency;
+}
+
 static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
   t_polarization pol;
+  unsigned int freq;
   switch (msg->body.fe_params.delivery_system)
   {
      case SYS_DVBS:
        pol = get_polarization(vt, msg);
-       satip_set_dvbs(vt->satip_cfg, msg->body.fe_params.frequency,
-		       msg->body.fe_params.u.qpsk.sat.tone, pol,
+       freq = get_sat_frequency(msg->body.fe_params.frequency, msg->body.fe_params.u.qpsk.sat.tone);
+       satip_set_dvbs(vt->satip_cfg, freq / 10, pol,
 		       msg->body.fe_params.u.qpsk.modulation,
-		       msg->body.fe_params.u.qpsk.symbol_rate,
+		       msg->body.fe_params.u.qpsk.symbol_rate / 1000,
 		       msg->body.fe_params.u.qpsk.fec_inner);
        break;
      case SYS_DVBS2:
        pol = get_polarization(vt, msg);
-       satip_set_dvbs2(vt->satip_cfg, msg->body.fe_params.frequency,
-		       msg->body.fe_params.u.qpsk.sat.tone, pol,
+       freq = get_sat_frequency(msg->body.fe_params.frequency, msg->body.fe_params.u.qpsk.sat.tone);
+       satip_set_dvbs2(vt->satip_cfg, freq / 10, pol,
 		       msg->body.fe_params.u.qpsk.modulation,
-		       msg->body.fe_params.u.qpsk.symbol_rate,
+		       msg->body.fe_params.u.qpsk.symbol_rate / 1000,
 		       msg->body.fe_params.u.qpsk.fec_inner,
 		       msg->body.fe_params.u.qpsk.rolloff,
 		       msg->body.fe_params.u.qpsk.pilot);
        break;
      case SYS_DVBC_ANNEX_A:
      case SYS_DVBC_ANNEX_B:
-       satip_set_dvbc(vt->satip_cfg, msg->body.fe_params.frequency,
+       satip_set_dvbc(vt->satip_cfg, msg->body.fe_params.frequency / 1000000,
 		       msg->body.fe_params.u.qam.inversion,
 		       msg->body.fe_params.u.qam.modulation,
-		       msg->body.fe_params.u.qam.symbol_rate);
-	DEBUG(MSG_NET,"inversion=%i\n", msg->body.fe_params.u.qam.inversion);
+		       msg->body.fe_params.u.qam.symbol_rate / 1000);
        break;
      default:
        ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_params.delivery_system);
@@ -205,7 +218,6 @@ void satip_vtuner_event(struct satip_vtuner* vt)
   switch(msg.type)
     {
     case MSG_SET_FRONTEND:
-      satip_del_allpid(vt->satip_cfg);
       set_frontend(vt,&msg);
       break;
 

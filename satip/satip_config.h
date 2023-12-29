@@ -122,12 +122,13 @@ t_satip_config* satip_new_config(int frontend);
 
 int satip_del_pid(t_satip_config* cfg,unsigned short pid);
 int satip_add_pid(t_satip_config* cfg,unsigned short pid);
+void satip_add_default_pids(t_satip_config *cfg);
 void satip_del_allpid(t_satip_config* cfg);
 
 int satip_set_position(t_satip_config* cfg, int position);
 
-int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner);
-int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots);
+int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner);
+int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots);
 int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversion, unsigned int modtype, unsigned int symrate);
 
 int satip_valid_config(t_satip_config* cfg);

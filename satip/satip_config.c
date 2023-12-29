@@ -127,6 +127,15 @@ int satip_del_pid(t_satip_config* cfg,unsigned short pid)
   return SATIPCFG_OK;
 }
 
+void satip_add_default_pids(t_satip_config *cfg)
+{
+   satip_add_pid(cfg, 0);
+   satip_add_pid(cfg, 16);
+   satip_add_pid(cfg, 17);
+   satip_add_pid(cfg, 18);
+   satip_add_pid(cfg, 20);
+}
+
 int satip_add_pid(t_satip_config* cfg,unsigned short pid)
 {
   int i;
@@ -169,26 +178,13 @@ int satip_add_pid(t_satip_config* cfg,unsigned short pid)
   return SATIPCFG_ERROR;
 }
 
-unsigned int get_sat_frequency(unsigned int freq, unsigned char tone)
-{
-  int frequency = (int) (freq / 100);
-  if (tone == SEC_TONE_ON)
-    frequency += 106000;
-  else
-    if (frequency - 97500 < 0)
-      frequency += 97500;
-    else
-      frequency -= 97500;
-  return (unsigned int) frequency;
-}
-
-int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner)
+int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner)
 {
   cfg->delsys = SYS_DVBS;
-  cfg->frequency = get_sat_frequency(freq, tone);
+  cfg->frequency = freq;
   cfg->polarization = pol;
   cfg->mod_type = modtype;
-  cfg->symbol_rate = symrate / 1000;
+  cfg->symbol_rate = symrate;
   cfg->fec_inner = fecinner;
   cfg->status = SATIPCFG_CHANGED;
 
@@ -201,13 +197,13 @@ int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, unsigned char tone, t
   return SATIPCFG_OK;
 }
 
-int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots)
+int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots)
 {
   cfg->delsys = SYS_DVBS2;
-  cfg->frequency = get_sat_frequency(freq, tone);
+  cfg->frequency = freq;
   cfg->polarization = pol;
   cfg->mod_type = modtype;
-  cfg->symbol_rate = symrate / 1000;
+  cfg->symbol_rate = symrate;
   cfg->fec_inner = fecinner;
   cfg->roll_off = rolloff;
   cfg->pilots = pilots;
@@ -226,9 +222,9 @@ int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, unsigned char tone, 
 int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversion, unsigned int modtype, unsigned int symrate)
 {
   cfg->delsys = SYS_DVBC_ANNEX_A;
-  cfg->frequency = freq / 1000000;
+  cfg->frequency = freq;
   cfg->mod_type = modtype;
-  cfg->symbol_rate = symrate / 1000;
+  cfg->symbol_rate = symrate;
   cfg->inversion = inversion;
   cfg->status = SATIPCFG_CHANGED;
 
@@ -311,10 +307,10 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
   if (cfg->delsys == SYS_DVBS || cfg->delsys == SYS_DVBS2) {
     /* DVB-S/DVB-S2 mandatory parameters */
     printed = snprintf(str, maxlen,
-		     "src=%d&%sfreq=%d.%d&pol=%c&msys=%s&mtype=%s&sr=%d&fec=%s",
+		     "src=%d&%sfreq=%d&pol=%c&msys=%s&mtype=%s&sr=%d&fec=%s",
 		     cfg->position,
 		     frontend_str,
-		     cfg->frequency/10, cfg->frequency%10,
+		     cfg->frequency,
 		     chrmap_polarization[cfg->polarization],
 		     cfg->delsys == SYS_DVBS ? "dvbs" : "dvbs2",
                      strmap_modtype[cfg->mod_type],
