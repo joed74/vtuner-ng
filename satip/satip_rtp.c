@@ -62,16 +62,22 @@ static void set_status(int fd, unsigned char status, int signallevel, int qualit
 	sig.status = status;
 	sig.strength.len = 2;
 	// signallevel 0-255
-	sig.strength.stat[0].scale = VT_SCALE_RELATIVE; // 0-100% as 0-65535
-	sig.strength.stat[0].u.uvalue = signallevel * 257;
+	sig.strength.len = 2;
+	if (signallevel>0) {
+	   sig.strength.stat[0].scale = VT_SCALE_DECIBEL; // in 0.001 dB steps
+	   sig.strength.stat[0].u.svalue = 1000.0 * (40.0 * (signallevel - 32)/ 192.0 - 65.0);
+	}
 
-	sig.strength.stat[1].scale = VT_SCALE_DECIBEL;
-	sig.strength.stat[1].u.svalue = (signallevel >= 0) ? 40.0 * (signallevel - 32)/ 192 - 65 : 0;
+	sig.strength.stat[1].scale = VT_SCALE_RELATIVE; // 0-100% as 0-65535
+	sig.strength.stat[1].u.uvalue = signallevel * 257;
 
 	sig.cnr.len = 1;
 	// quality 15-0
+
+	// missing conversion from 15 to 0 into decibel values...
+
 	sig.cnr.stat[0].scale = VT_SCALE_RELATIVE; // 0-100% as 0-65535
-	sig.cnr.stat[0].u.uvalue = (quality >= 0) ? (quality * 65535 / 15) : 0; 
+	sig.cnr.stat[0].u.uvalue = quality * 65535 / 15; 
 	
 	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
 }
