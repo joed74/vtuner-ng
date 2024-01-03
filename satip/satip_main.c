@@ -114,11 +114,12 @@ void hangup(int sig)
 void usage(char *name)
 {
   fprintf(stderr,
-     "usage: %s -s satip_receiver [-p 554] [-d /dev/vtunerc0] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port]\n"
+     "usage: %s -s satip_receiver [-p 554] [-d /dev/vtunercX] [-D delsys[,delsys]] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port]\n"
      "  -s\tip or hostname of satip receiver\n"
      "  -p\tport of satip receiver (defaults to 554)\n"
      "  -d\tvtuner device (defaults to /dev/vtunerc0)\n"
-     "  -f\tfrontend on satip, number between 1 to N (defaults to let receiver decide)\n"
+     "  -D\tvtuner frontend delivery system, values: DVBS DVBS2 DVBT DVBT2 DVBC DVBC_B DVBC_C (defaults to all)\n"
+     "  -f\tfrontend on satip receiver, number between 1 to N (defaults to let receiver decide)\n"
      "  -l\tloglevel: 1 = error, 2 = warnings, 3 = info, 4 = debug (defaults to error)\n"
      "  -m\tmask for logs: 1 = main, 2 = net, 4 = data, 7 = all (defaults to main + net)\n"
      "  -r\tfixed rtp port (e.g. 45200)\n"
@@ -132,6 +133,7 @@ int main(int argc, char** argv)
   char* host = NULL;
   char* port = "554";
   char* device = "/dev/vtunerc0";
+  char* delsys = NULL;
   int frontend = -1;
   int fixed_rtp_port = -1;
 
@@ -150,7 +152,7 @@ int main(int argc, char** argv)
   signal(SIGINT, hangup);
   signal(SIGTERM, hangup);
 
-  while((opt = getopt(argc, argv, "s:Tp:d:f:m:l:r:h::")) != -1 ) {
+  while((opt = getopt(argc, argv, "s:Tp:d:D:f:m:l:r:h::")) != -1 ) {
     switch(opt) 
       {
       case 'h': 
@@ -168,6 +170,10 @@ int main(int argc, char** argv)
       case 'd': 
 	device = optarg;
 	break;
+
+      case 'D':
+	delsys = optarg;
+        break;
 
       case 'f': 
 	frontend = atoi(optarg);
@@ -223,7 +229,7 @@ int main(int argc, char** argv)
 
   } else {
 
-    satvt = satip_vtuner_new( device, satconf );
+    satvt = satip_vtuner_new( device, delsys, satconf );
   
     if ( satvt == NULL )
       {

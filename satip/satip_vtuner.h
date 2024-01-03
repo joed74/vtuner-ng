@@ -23,7 +23,7 @@
 
 struct satip_vtuner;
 
-struct satip_vtuner* satip_vtuner_new(char* devname,struct satip_config* satip_cfg);
+struct satip_vtuner* satip_vtuner_new(char* devname,char *delsys,struct satip_config* satip_cfg);
 int satip_vtuner_fd(struct satip_vtuner* vt);
 
 void satip_vtuner_event(struct satip_vtuner* vt);

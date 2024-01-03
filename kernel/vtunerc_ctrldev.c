@@ -29,6 +29,7 @@
 
 #define VTUNER_MSG_LEN (sizeof(struct vtuner_message))
 #define VTUNER_SIG_LEN (sizeof(struct vtuner_signal))
+#define VTUNER_DELSYS_LEN (sizeof(struct vtuner_delsys))
 
 static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
@@ -200,6 +201,14 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->fe_params.delivery_system=0; // now retune can happen
 		for (i=0; i<MAX_PIDTAB_LEN; i++)
 			if (ctx->feedtab[i]!=NULL) ctx->feedtab[i]->pusi_seen=false;
+		memset(&ctx->fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
+		ctx->fe->ops.delsys[0]=SYS_DVBT;
+		ctx->fe->ops.delsys[1]=SYS_DVBT2;
+		ctx->fe->ops.delsys[2]=SYS_DVBC_ANNEX_A;
+		ctx->fe->ops.delsys[3]=SYS_DVBC_ANNEX_B;
+		ctx->fe->ops.delsys[4]=SYS_DVBC_ANNEX_C;
+		ctx->fe->ops.delsys[5]=SYS_DVBS;
+		ctx->fe->ops.delsys[6]=SYS_DVBS2;
 	}
 	return 0;
 }
@@ -245,6 +254,55 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 			ret = -EFAULT;
 		}
 		wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
+		break;
+
+	case VTUNER_SET_DELSYS:
+		int i;
+		struct vtuner_delsys delsys;
+		if (copy_from_user(&delsys, (char *) arg, VTUNER_DELSYS_LEN)) {
+			ret = -EFAULT;
+		}
+		// sanity check, we dont allow all
+		for (i=0; i<VTUNER_MAX_DELSYS; i++)
+		{
+			if (delsys.value[i]==4 || (delsys.value[i]>6 && delsys.value[i]<16) || delsys.value[i]>19)
+				ret = -EINVAL;
+		}
+		if (!ctx->fe) ret=-EFAULT;
+		if (ret==0) {
+			memcpy(&ctx->fe->ops.delsys, &delsys.value, MAX_DELSYS*sizeof(u8));
+			printk(KERN_INFO "vtunerc%d: setting delsys to", ctx->idx);
+			for (i=0; i<VTUNER_MAX_DELSYS; i++) {
+				switch (delsys.value[i])
+				{
+				    case 1:
+				      printk(KERN_CONT " DVBC");
+				      break;
+				    case 2:
+				      printk(KERN_CONT " DVBC_B");
+				      break;
+				    case 3:
+				      printk(KERN_CONT " DVBT");
+				      break;
+				    case 5:
+				      printk(KERN_CONT " DVBS");
+				      break;
+				    case 6:
+				      printk(KERN_CONT " DVBS2");
+				      break;
+				    case 16:
+				      printk(KERN_CONT " DVBT2");
+				      break;
+				    case 18:
+				      printk(KERN_CONT " DVBC_C");
+				      break;
+				    case 19:
+				      printk(KERN_CONT " DVBC2");
+				      break;
+				}
+			}
+			printk(KERN_CONT "\n");
+		}
 		break;
 
 	default:

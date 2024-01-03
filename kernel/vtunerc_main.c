@@ -400,9 +400,10 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 				roff2str(seq, fep->u.qpsk.rolloff);
 				pilot2str(seq, fep->u.qpsk.pilot);
 			}
-			if (fep->delivery_system==SYS_DVBC_ANNEX_A || fep->delivery_system==SYS_DVBC_ANNEX_B) {
+			if (fep->delivery_system==SYS_DVBC_ANNEX_A || fep->delivery_system==SYS_DVBC_ANNEX_B || 
+			    fep->delivery_system==SYS_DVBC_ANNEX_C) {
 				mod2str(seq, fep->u.qam.modulation);
-				seq_printf(seq, " frequency        : %i\n", fep->frequency/1000000);
+				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 				seq_printf(seq, " symbolrate       : %i\n", fep->u.qam.symbol_rate / 1000);
 				inversion2str(seq, fep->u.qam.inversion);
 			}

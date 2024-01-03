@@ -148,6 +148,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		memcpy(&msg.body.fe_params.u.qpsk.sat, &ctx->fe_params.u.qpsk.sat, sizeof(struct sat_params));
 		break;
 	case SYS_DVBT:
+	case SYS_DVBT2:
 		msg.body.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
 		msg.body.fe_params.u.ofdm.code_rate_HP = c->code_rate_HP;
 		msg.body.fe_params.u.ofdm.code_rate_LP = c->code_rate_LP;
@@ -158,6 +159,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		break;
 	case SYS_DVBC_ANNEX_A:
 	case SYS_DVBC_ANNEX_B:
+	case SYS_DVBC_ANNEX_C:
 		msg.body.fe_params.u.qam.inversion = c->inversion;
 		msg.body.fe_params.u.qam.symbol_rate = c->symbol_rate;
 		msg.body.fe_params.u.qam.modulation = c->modulation;
@@ -286,7 +288,7 @@ static struct dvb_frontend *dvb_proxyfe_attach(struct vtunerc_ctx *ctx)
 }
 
 static struct dvb_frontend_ops dvb_proxyfe_ops = {
-        .delsys = { SYS_DVBT, SYS_DVBC_ANNEX_A, SYS_DVBS, SYS_DVBS2 },
+        .delsys = { SYS_DVBT, SYS_DVBT2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_B, SYS_DVBC_ANNEX_C, SYS_DVBS, SYS_DVBS2 },
 	.info = {
 		.name			= "vTuner proxyFE DVB-Multi",
 		.frequency_min_hz	= 51 * MHz,
@@ -297,9 +299,10 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 		.symbol_rate_max	= 45000000,
 		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |
 			FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 | FE_CAN_FEC_8_9 | FE_CAN_QPSK | FE_CAN_RECOVER |
-			FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_64 | FE_CAN_QAM_AUTO | FE_CAN_TRANSMISSION_MODE_AUTO |
-			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO | FE_CAN_QAM_128 | FE_CAN_QAM_256 | FE_CAN_FEC_AUTO |
-			FE_CAN_INVERSION_AUTO | FE_CAN_2G_MODULATION | FE_CAN_MULTISTREAM
+			FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_32 | FE_CAN_QAM_64 | FE_CAN_QAM_128 | FE_CAN_QAM_256 | 
+			FE_CAN_QAM_AUTO | FE_CAN_8VSB | FE_CAN_16VSB | FE_CAN_TRANSMISSION_MODE_AUTO |
+			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO | FE_CAN_FEC_AUTO |
+			FE_CAN_INVERSION_AUTO | FE_CAN_2G_MODULATION | FE_CAN_TURBO_FEC | FE_CAN_MULTISTREAM
 	},
 
 	.release = dvb_proxyfe_release,

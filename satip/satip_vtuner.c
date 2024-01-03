@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -53,7 +54,7 @@ typedef struct satip_vtuner {
 } t_satip_vtuner;
 
 
-t_satip_vtuner* satip_vtuner_new(char* devname,t_satip_config* satip_cfg)
+t_satip_vtuner* satip_vtuner_new(char* devname,char *delsys,t_satip_config* satip_cfg)
 {
   int fd;
   t_satip_vtuner* vt;
@@ -72,6 +73,28 @@ t_satip_vtuner* satip_vtuner_new(char* devname,t_satip_config* satip_cfg)
 
   /* set default position A, if appl. does not configure */
   satip_set_position(satip_cfg,1);
+
+  if (delsys!=NULL) {
+    // set delivery systems
+    int i=0;
+    struct vtuner_delsys vt_delsys;
+    memset(&vt_delsys,0,sizeof(struct vtuner_delsys));
+    char *token = strtok(delsys, ",");
+    while (token != NULL) {
+       if (!strcasecmp(token, "DVBS")) vt_delsys.value[i++]=SYS_DVBS;
+       if (!strcasecmp(token, "DVBS2")) vt_delsys.value[i++]=SYS_DVBS2;
+       if (!strcasecmp(token, "DVBC")) vt_delsys.value[i++]=SYS_DVBC_ANNEX_A;
+       if (!strcasecmp(token, "DVBC_A")) vt_delsys.value[i++]=SYS_DVBC_ANNEX_A;
+       if (!strcasecmp(token, "DVBC_B")) vt_delsys.value[i++]=SYS_DVBC_ANNEX_B;
+       if (!strcasecmp(token, "DVBC_C")) vt_delsys.value[i++]=SYS_DVBC_ANNEX_C;
+       if (!strcasecmp(token, "DVBT")) vt_delsys.value[i++]=SYS_DVBT;
+       if (!strcasecmp(token, "DVBT2")) vt_delsys.value[i++]=SYS_DVBT2;
+       token = strtok(NULL,",");
+       if (i>VTUNER_MAX_DELSYS) break;
+    }
+    ioctl(fd, VTUNER_SET_DELSYS, &vt_delsys);
+
+  }
 
   return vt;
 }
