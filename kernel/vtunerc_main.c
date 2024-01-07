@@ -85,7 +85,7 @@ void send_pidlist(struct vtunerc_ctx *ctx)
 	for (i = 0; i< MAX_PIDTAB_LEN; i++) {
 		if (ctx->feedtab[i]!=NULL) {
 			msg.body.pidlist[i] = ctx->feedtab[i]->pid;
-			dprintk_cont(ctx, " %i", ctx->feedtab[i]->pid);
+			dprintk_cont(ctx, " %i%s", ctx->feedtab[i]->pid, (ctx->feedtab[i]->type==DMX_TYPE_SEC) ? "s" : "t");
 		} else {
 			msg.body.pidlist[i] = PID_UNKNOWN;
 		}
@@ -115,13 +115,12 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	  return -EINVAL;
 	}
 
-	/* organize PID list table */
+	dprintk(ctx, "add pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	if (feedtab_find_pid(ctx, feed->pid) < 0) {
-		dprintk(ctx, "add pid %i%s", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 		ctx->adapter_inuse = 1;
+		feed->pusi_seen = 0;
 		feedtab_add_feed(ctx, feed);
 	}
-
 	return 0;
 }
 
@@ -131,9 +130,9 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 	struct vtunerc_ctx *ctx = demux->priv;
 	int idx;
 
+	dprintk(ctx, "del pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	idx = feedtab_find_pid(ctx, feed->pid);
 	if (idx > -1) {
-		dprintk(ctx, "del pid %i%s", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 		ctx->feedtab[idx] = NULL;
 		send_pidlist(ctx);
 	}

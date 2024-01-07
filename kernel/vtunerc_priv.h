@@ -62,7 +62,6 @@ struct vtunerc_ctx {
 	struct fe_params fe_params;
 
 	struct dvb_demux_feed *feedtab[MAX_PIDTAB_LEN];
-	int tuning;
 
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;
@@ -72,7 +71,7 @@ struct vtunerc_ctx {
 
 	char *procname;
 
-	char *kernel_buf;
+	unsigned char *kernel_buf;
 	ssize_t kernel_buf_size;
 
 	/* ctrldev */

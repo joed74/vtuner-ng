@@ -41,5 +41,6 @@ clean:
 	rm -f *.order
 	
 install:
+	make default
 	cp vtunerc.ko $(KDIR)/kernel/drivers/media/tuners
 	depmod -a $(KVER)

@@ -93,9 +93,11 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		} else {
 			sendfiller=1;
 			idx = feedtab_find_pid(ctx, pid);
-			if (ctx->tuning) idx=-1;
 			if (idx > -1) {
-				if (!(ctx->signal.status & FE_HAS_LOCK) && ctx->feedtab[idx]->type==DMX_TYPE_TS) ctx->signal.status |= FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
+				if (!(ctx->signal.status & FE_HAS_LOCK) && ctx->feedtab[idx]->type==DMX_TYPE_TS) {
+					dprintk(ctx, "set signal LOCK (internal)\n");
+					ctx->signal.status |= FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
+				}
 				if (ctx->feedtab[idx]->pusi_seen) sendfiller=0; // pusi seen -> no filler
 				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) sendfiller=0; // packet ist already a filler
 				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->feedtab[idx]->pusi_seen)) {
@@ -200,7 +202,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		memset(&ctx->signal,0,sizeof(struct vtuner_signal));
 		ctx->fe_params.delivery_system=0; // now retune can happen
 		for (i=0; i<MAX_PIDTAB_LEN; i++)
-			if (ctx->feedtab[i]!=NULL) ctx->feedtab[i]->pusi_seen=false;
+			if (ctx->feedtab[i]!=NULL) ctx->feedtab[i]->pusi_seen=0;
 		memset(&ctx->fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
 		ctx->fe->ops.delsys[0]=SYS_DVBT;
 		ctx->fe->ops.delsys[1]=SYS_DVBT2;
@@ -216,17 +218,24 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct vtunerc_ctx *ctx = file->private_data;
-	int ret = 0;
+	struct vtuner_delsys delsys;
+	int ret = 0, i;
 
 	if (down_interruptible(&ctx->ioctl_sem))
 		return -ERESTARTSYS;
 
 	switch (cmd) {
 	case VTUNER_SET_SIGNAL:
-		dprintk(ctx, "set signal\n");
 		if (copy_from_user(&ctx->signal, (char *)arg, VTUNER_SIG_LEN)) {
 			ret = -EFAULT;
 		}
+		dprintk(ctx, "set signal");
+		if (ctx->signal.status & FE_HAS_SIGNAL) dprintk_cont(ctx, " SIGNAL");
+		if (ctx->signal.status & FE_HAS_CARRIER) dprintk_cont(ctx, " CARRIER");
+		if (ctx->signal.status & FE_HAS_VITERBI) dprintk_cont(ctx, " VITERBI");
+		if (ctx->signal.status & FE_HAS_SYNC) dprintk_cont(ctx, " SYNC");
+		if (ctx->signal.status & FE_HAS_LOCK) dprintk_cont(ctx, " LOCK");
+		dprintk_cont(ctx, "\n");
 		dvb_proxyfe_set_signal(ctx);
 		break;
 
@@ -257,8 +266,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		break;
 
 	case VTUNER_SET_DELSYS:
-		int i;
-		struct vtuner_delsys delsys;
 		if (copy_from_user(&delsys, (char *) arg, VTUNER_DELSYS_LEN)) {
 			ret = -EFAULT;
 		}
@@ -268,7 +275,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 			if (delsys.value[i]==4 || (delsys.value[i]>6 && delsys.value[i]<16) || delsys.value[i]>19)
 				ret = -EINVAL;
 		}
-		if (!ctx->fe) ret=-EFAULT;
+		if (ret==0 && !ctx->fe) ret=-EFAULT;
 		if (ret==0) {
 			memcpy(&ctx->fe->ops.delsys, &delsys.value, MAX_DELSYS*sizeof(u8));
 			printk(KERN_INFO "vtunerc%d: setting delsys to", ctx->idx);

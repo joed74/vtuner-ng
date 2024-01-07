@@ -173,16 +173,14 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 
 		ctx->stat_time = ktime_get_seconds();
 		ctx->signal.status = FE_NONE;
-		ctx->tuning = 1;
 
-		dprintk(ctx, "MSG_SET_FRONTEND\n");
+		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE\n");
 
 		msg.type = MSG_SET_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 		memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
 
 		send_pidlist(ctx);
-		ctx->tuning = 0;
 	}
 	return 0;
 }
