@@ -56,30 +56,49 @@ int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
 {
 	int i = 0;
 
+	down(&ctx->pidlist_sem);
 	while (i < MAX_PIDTAB_LEN) {
-		if (ctx->feedtab[i] != NULL && ctx->feedtab[i]->pid == pid) return i;
+		if (ctx->feedtab[i] != NULL && ctx->feedtab[i]->pid == pid) {
+			up(&ctx->pidlist_sem);
+			return i;
+		}
 		i++;
 	}
 
+	up(&ctx->pidlist_sem);
 	return -1;
 }
 
 static int feedtab_add_feed(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
 {
 	int i;
+	down(&ctx->pidlist_sem);
+
 	for (i = 0; i < MAX_PIDTAB_LEN; i++)
 		if (ctx->feedtab[i] == NULL) {
 			ctx->feedtab[i] = feed;
-			send_pidlist(ctx);
+			up(&ctx->pidlist_sem);
 			return 1;
 		}
+	up(&ctx->pidlist_sem);
 	return 0;
+}
+
+static int feedtab_remove_feed(struct vtunerc_ctx *ctx, int feedidx)
+{
+	if (feedidx < 0 || feedidx > MAX_PIDTAB_LEN) return 0;
+	down(&ctx->pidlist_sem);
+	ctx->feedtab[feedidx] = NULL;
+	up(&ctx->pidlist_sem);
+	return 1;
 }
 
 void send_pidlist(struct vtunerc_ctx *ctx)
 {
 	struct vtuner_message msg;
 	int i;
+
+	down(&ctx->pidlist_sem);
 
 	dprintk(ctx,"MSG_PIDLIST");
 	for (i = 0; i< MAX_PIDTAB_LEN; i++) {
@@ -93,6 +112,8 @@ void send_pidlist(struct vtunerc_ctx *ctx)
 	dprintk_cont(ctx, "\n");
 	msg.type = MSG_PIDLIST;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
+
+	up(&ctx->pidlist_sem);
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
@@ -119,7 +140,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	if (feedtab_find_pid(ctx, feed->pid) < 0) {
 		ctx->adapter_inuse = 1;
 		feed->pusi_seen = 0;
-		feedtab_add_feed(ctx, feed);
+		if (feedtab_add_feed(ctx, feed)) send_pidlist(ctx);
 	}
 	return 0;
 }
@@ -133,10 +154,8 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 	dprintk(ctx, "del pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	idx = feedtab_find_pid(ctx, feed->pid);
 	if (idx > -1) {
-		ctx->feedtab[idx] = NULL;
-		send_pidlist(ctx);
+		if (feedtab_remove_feed(ctx, idx)) send_pidlist(ctx);
 	}
-
 	return 0;
 }
 
@@ -565,6 +584,7 @@ static int __init vtunerc_init(void)
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
 		sema_init(&ctx->tswrite_sem, 1);
+		sema_init(&ctx->pidlist_sem, 1);
 
 #ifdef CONFIG_PROC_FS
 		{

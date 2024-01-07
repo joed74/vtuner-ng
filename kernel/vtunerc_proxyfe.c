@@ -174,7 +174,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		ctx->stat_time = ktime_get_seconds();
 		ctx->signal.status = FE_NONE;
 
-		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE\n");
+		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE (internal)\n");
 
 		msg.type = MSG_SET_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);

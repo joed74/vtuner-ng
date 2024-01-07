@@ -66,6 +66,7 @@ struct vtunerc_ctx {
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;
 	struct semaphore tswrite_sem;
+	struct semaphore pidlist_sem;
 	int fd_opened;
 	int adapter_inuse;
 
