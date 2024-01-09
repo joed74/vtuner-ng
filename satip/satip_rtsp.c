@@ -114,6 +114,7 @@ static void reset_connection(t_satip_rtsp* rtsp)
   rtsp->status = RTSP_NOCONFIG;
 
   rtsp->cseq = 1;
+  rtsp->streamid = -1;
   rtsp->request = RTSP_REQ_NONE;
   rtsp->timeout = 30;
   rtsp->session[0] = 0;
@@ -318,7 +319,6 @@ static int send_options(t_satip_rtsp* rtsp)
 
 static int send_teardown(t_satip_rtsp* rtsp)
 {
-  if (rtsp->streamid==0) return SATIP_RTSP_OK;
   int printed;
 
   printed =
