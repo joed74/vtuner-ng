@@ -180,7 +180,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 		memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
 
-		send_pidlist(ctx);
+		send_pidlist(ctx, true);
 	}
 	return 0;
 }

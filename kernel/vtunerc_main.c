@@ -54,72 +54,67 @@ static struct vtunerc_config config = {
 
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
 {
-	int i = 0;
+	struct dvb_demux_feed *entry;
+	int i = -1;
+	mutex_lock(&ctx->demux.mutex); // prevent change on list
 
-	down(&ctx->pidlist_sem);
-	while (i < MAX_PIDTAB_LEN) {
-		if (ctx->feedtab[i] != NULL && ctx->feedtab[i]->pid == pid) {
-			up(&ctx->pidlist_sem);
-			return i;
-		}
-		i++;
-	}
+	list_for_each_entry(entry, &ctx->demux.feed_list, list_head)
+		if (entry->pid == pid) i = entry->index;
 
-	up(&ctx->pidlist_sem);
-	return -1;
+	mutex_unlock(&ctx->demux.mutex);
+	return i;
 }
 
-static int feedtab_add_feed(struct vtunerc_ctx *ctx, struct dvb_demux_feed *feed)
-{
-	int i;
-	down(&ctx->pidlist_sem);
-
-	for (i = 0; i < MAX_PIDTAB_LEN; i++)
-		if (ctx->feedtab[i] == NULL) {
-			ctx->feedtab[i] = feed;
-			up(&ctx->pidlist_sem);
-			return 1;
-		}
-	up(&ctx->pidlist_sem);
-	return 0;
-}
-
-static int feedtab_remove_feed(struct vtunerc_ctx *ctx, int feedidx)
-{
-	if (feedidx < 0 || feedidx > MAX_PIDTAB_LEN) return 0;
-	down(&ctx->pidlist_sem);
-	ctx->feedtab[feedidx] = NULL;
-	up(&ctx->pidlist_sem);
-	return 1;
-}
-
-void send_pidlist(struct vtunerc_ctx *ctx)
+void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 {
 	struct vtuner_message msg;
-	int i;
+	struct dvb_demux_feed *entry;
+	u16 stdpids[]={0,16,17,18,19,20};
+	int i,x;
 
-	down(&ctx->pidlist_sem);
+	if (retune) mutex_lock(&ctx->demux.mutex);
 
-	dprintk(ctx,"MSG_PIDLIST");
-	for (i = 0; i< MAX_PIDTAB_LEN; i++) {
-		if (ctx->feedtab[i]!=NULL) {
-			msg.body.pidlist[i] = ctx->feedtab[i]->pid;
-			dprintk_cont(ctx, " %i%s", ctx->feedtab[i]->pid, (ctx->feedtab[i]->type==DMX_TYPE_SEC) ? "s" : "t");
-		} else {
-			msg.body.pidlist[i] = PID_UNKNOWN;
+	dprintk(ctx,"MSG_PIDLIST%s", retune ? " (DTV_TUNE)" : "");
+
+	memset(&msg.body.pidlist,0xff,sizeof(msg.body.pidlist));
+	list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
+		if (entry->state == DMX_STATE_GO || entry->state == DMX_STATE_READY) {
+			msg.body.pidlist[entry->index] = entry->pid;
+			if (entry->pid==0) stdpids[0]=PID_UNKNOWN;
+			if (entry->pid==16) stdpids[1]=PID_UNKNOWN;
+			if (entry->pid==17) stdpids[2]=PID_UNKNOWN;
+			if (entry->pid==18) stdpids[3]=PID_UNKNOWN;
+			if (entry->pid==19) stdpids[4]=PID_UNKNOWN;
+			if (entry->pid==20) stdpids[5]=PID_UNKNOWN;
+			dprintk_cont(ctx," %i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
+			if (retune) entry->pusi_seen=0;
+		}
+	}
+	// add standard pids
+	x=0;
+	for (i=0; i<MAX_PIDTAB_LEN; i++) {
+		while (stdpids[x] == PID_UNKNOWN && x<=5) x++;
+		if (x>5) break;
+		if (msg.body.pidlist[i] == PID_UNKNOWN) {
+			msg.body.pidlist[i]=stdpids[x];
+			dprintk_cont(ctx, " %is", stdpids[x]);
+			x++;
 		}
 	}
 	dprintk_cont(ctx, "\n");
+
 	msg.type = MSG_PIDLIST;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
 
-	up(&ctx->pidlist_sem);
+	if (retune) mutex_unlock(&ctx->demux.mutex);
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
+
+	// called with demux mutex already locked
 
 	switch (feed->type) {
 	case DMX_TYPE_TS:
@@ -136,12 +131,12 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	  return -EINVAL;
 	}
 
+	ctx->adapter_inuse = 1;
+
+	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "add pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
-	if (feedtab_find_pid(ctx, feed->pid) < 0) {
-		ctx->adapter_inuse = 1;
-		feed->pusi_seen = 0;
-		if (feedtab_add_feed(ctx, feed)) send_pidlist(ctx);
-	}
+	feed->pusi_seen = 0;
+	send_pidlist(ctx, false);
 	return 0;
 }
 
@@ -149,13 +144,13 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
-	int idx;
 
+	// called with demux mutex already locked
+
+	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "del pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
-	idx = feedtab_find_pid(ctx, feed->pid);
-	if (idx > -1) {
-		if (feedtab_remove_feed(ctx, idx)) send_pidlist(ctx);
-	}
+	feed->state = DMX_STATE_ALLOCATED; // we must set this here!
+	if (feed->type==DMX_TYPE_SEC) send_pidlist(ctx, false);
 	return 0;
 }
 
@@ -397,8 +392,9 @@ static void sectiontable2str(struct seq_file *seq, unsigned short pid)
 
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
-	int i, pcnt = 0;
+	int pcnt = 0;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
+	struct dvb_demux_feed *entry;
 
 	seq_printf(seq, "[vtunerc driver, version " VTUNERC_MODULE_VERSION "]\n");
 	seq_printf(seq, " vtunerc%i used by : %u\n", ctx->idx, ctx->fd_opened);
@@ -426,16 +422,19 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 				inversion2str(seq, fep->u.qam.inversion);
 			}
 			seq_printf(seq, " pid tab          :");
-			for (i = 0; i < MAX_PIDTAB_LEN; i++)
-				if (ctx->feedtab[i] != NULL) {
-					if (ctx->feedtab[i]->type==DMX_TYPE_SEC) {
-						sectiontable2str(seq, ctx->feedtab[i]->pid);
+			mutex_lock(&ctx->demux.mutex);
+			list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
+				if (entry->state == DMX_STATE_READY || entry->state == DMX_STATE_GO) {
+					if (entry->type==DMX_TYPE_SEC) {
+						sectiontable2str(seq, entry->pid);
 					} else {
-						seq_printf(seq, " %i", ctx->feedtab[i]->pid);
+						seq_printf(seq," %i", entry->pid);
 					}
-					if (ctx->feedtab[i]->pusi_seen) seq_printf(seq, "*");
+					if (entry->pusi_seen) seq_printf(seq, "*");
 					pcnt++;
 				}
+			}
+			mutex_unlock(&ctx->demux.mutex);
 			seq_printf(seq, " (len=%d)\n", pcnt);
 		}
 	}
@@ -584,7 +583,6 @@ static int __init vtunerc_init(void)
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
 		sema_init(&ctx->tswrite_sem, 1);
-		sema_init(&ctx->pidlist_sem, 1);
 
 #ifdef CONFIG_PROC_FS
 		{

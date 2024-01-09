@@ -94,18 +94,18 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			sendfiller=1;
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
-				if (!(ctx->signal.status & FE_HAS_LOCK) && ctx->feedtab[idx]->type==DMX_TYPE_TS) {
+				if (!(ctx->signal.status & FE_HAS_LOCK) && ctx->demux.feed[idx].type==DMX_TYPE_TS) {
 					dprintk(ctx, "set signal LOCK (internal)\n");
 					ctx->signal.status |= FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
 				}
-				if (ctx->feedtab[idx]->pusi_seen) sendfiller=0; // pusi seen -> no filler
+				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
 				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) sendfiller=0; // packet ist already a filler
-				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->feedtab[idx]->pusi_seen)) {
+				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->demux.feed[idx].pusi_seen)) {
 					cc = ctx->kernel_buf[i+3] & 0x0f;
 					dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
 					cc = cc - 1;
 					if (cc == -1) cc = 15;
-					ctx->feedtab[idx]->cc = cc;
+					ctx->demux.feed[idx].cc = cc;
 					pusi = 1;
 					sendfiller=0;
 				}
@@ -122,7 +122,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 		}
 		dvb_dmx_swfilter_packets(demux, &ctx->kernel_buf[i], 1);
-		if (idx > -1 && pusi) ctx->feedtab[idx]->pusi_seen=1;
+		if (idx > -1 && pusi) ctx->demux.feed[idx].pusi_seen=1;
 	}
 
 	ctx->stat_wr_data += len;
@@ -180,7 +180,6 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	int minor;
-	int i;
 
 	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
 
@@ -201,8 +200,6 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->stat_fe_data = 0;
 		memset(&ctx->signal,0,sizeof(struct vtuner_signal));
 		ctx->fe_params.delivery_system=0; // now retune can happen
-		for (i=0; i<MAX_PIDTAB_LEN; i++)
-			if (ctx->feedtab[i]!=NULL) ctx->feedtab[i]->pusi_seen=0;
 		memset(&ctx->fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
 		ctx->fe->ops.delsys[0]=SYS_DVBT;
 		ctx->fe->ops.delsys[1]=SYS_DVBT2;
