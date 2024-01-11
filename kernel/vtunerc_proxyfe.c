@@ -117,7 +117,7 @@ static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 	return 0;
 }
 
-static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
+static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int mode_flags, unsigned int *delay, enum fe_status *status)
 {
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
@@ -167,6 +167,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 
 		ctx->stat_time = ktime_get_seconds();
 		ctx->status = FE_NONE;
+		*status = FE_NONE;
 
 		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE\n");
 
@@ -177,11 +178,6 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 		send_pidlist(ctx, true);
 	}
 	return 0;
-}
-
-static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int mode_flags, unsigned int *delay, enum fe_status *status)
-{
-	return dvb_proxyfe_set_frontend(fe);
 }
 
 static enum dvbfe_algo dvb_proxyfe_get_frontend_algo(struct dvb_frontend *fe)
@@ -304,7 +300,6 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 	.sleep = dvb_proxyfe_sleep,
 
 	.get_frontend_algo = dvb_proxyfe_get_frontend_algo,
-	.set_frontend = dvb_proxyfe_set_frontend,
 	.tune = dvb_proxyfe_tune,
 
 	.read_status = dvb_proxyfe_read_status,
