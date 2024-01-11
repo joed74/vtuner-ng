@@ -94,9 +94,9 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			sendfiller=1;
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
-				if (!(ctx->signal.status & FE_HAS_LOCK) && ctx->demux.feed[idx].type==DMX_TYPE_TS) {
-					dprintk(ctx, "set signal LOCK (internal)\n");
-					ctx->signal.status |= FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
+				if (!(ctx->status & FE_HAS_LOCK) && ctx->demux.feed[idx].type==DMX_TYPE_TS) {
+					dprintk(ctx, "set signal LOCK\n");
+					ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
 				}
 				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
 				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) sendfiller=0; // packet ist already a filler
@@ -226,13 +226,6 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		if (copy_from_user(&ctx->signal, (char *)arg, VTUNER_SIG_LEN)) {
 			ret = -EFAULT;
 		}
-		dprintk(ctx, "set signal");
-		if (ctx->signal.status & FE_HAS_SIGNAL) dprintk_cont(ctx, " SIGNAL");
-		if (ctx->signal.status & FE_HAS_CARRIER) dprintk_cont(ctx, " CARRIER");
-		if (ctx->signal.status & FE_HAS_VITERBI) dprintk_cont(ctx, " VITERBI");
-		if (ctx->signal.status & FE_HAS_SYNC) dprintk_cont(ctx, " SYNC");
-		if (ctx->signal.status & FE_HAS_LOCK) dprintk_cont(ctx, " LOCK");
-		dprintk_cont(ctx, "\n");
 		dvb_proxyfe_set_signal(ctx);
 		break;
 

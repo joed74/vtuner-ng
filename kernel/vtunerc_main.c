@@ -399,7 +399,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 	seq_printf(seq, "[vtunerc driver, version " VTUNERC_MODULE_VERSION "]\n");
 	seq_printf(seq, " vtunerc%i used by : %u\n", ctx->idx, ctx->fd_opened);
 	seq_printf(seq, " adapter%i in use  : %s\n", ctx->dvb_adapter.num, (ctx->adapter_inuse == 1) ? "yes" : "no");
-	status2str(seq, ctx->signal.status);
+	status2str(seq, ctx->status);
 	if (ctx->stat_time>0)
 		seq_printf(seq, " last change      : %lli\n", ktime_get_seconds()-ctx->stat_time);
 	if (ctx->fe) {

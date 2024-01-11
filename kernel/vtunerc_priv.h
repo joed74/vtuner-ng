@@ -61,6 +61,8 @@ struct vtunerc_ctx {
 	struct vtuner_signal signal;
 	struct fe_params fe_params;
 
+	u8 status;
+
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;
 	struct semaphore tswrite_sem;

@@ -8,6 +8,7 @@ $(BIN):  $(OBJ)
 	$(CC) -o $(BIN) $(OBJ) -lrt -lpthread 
 
 install:
+	make $(BIN)
 	cp $(BIN) /usr/local/bin
 
 uninstall:

@@ -127,7 +127,6 @@ struct vtuner_dtv_fe_stats {
 } __attribute__ ((packed));
 
 struct vtuner_signal {
-	u8 status;
 	struct vtuner_dtv_fe_stats strength;
 	struct vtuner_dtv_fe_stats cnr;
 	struct vtuner_dtv_fe_stats pre_bit_error;

@@ -39,8 +39,6 @@ typedef struct satip_rtp_last
 {
   int signallevel;
   int quality;
-  int freq;
-  int status;
 } t_satip_rtp_last;
 
 typedef struct satip_rtp
@@ -55,27 +53,25 @@ typedef struct satip_rtp
 } t_satip_rtp;
 
 
-static void set_status(int fd, unsigned char status, int signallevel, int quality)
+static void set_signal(int fd, int level, int quality)
 {
 	struct vtuner_signal sig;
 	memset(&sig,0,sizeof(struct vtuner_signal));
-	sig.status = status;
 	sig.strength.len = 2;
-	// signallevel 0-255
+	// level 0-255
 	sig.strength.len = 2;
-	if (signallevel>0) {
+	if (level>0) {
 	   sig.strength.stat[0].scale = VT_SCALE_DECIBEL; // in 0.001 dB steps
-	   sig.strength.stat[0].u.svalue = 1000.0 * (40.0 * (signallevel - 32)/ 192.0 - 65.0);
+	   sig.strength.stat[0].u.svalue = 1000.0 * (40.0 * (level - 32)/ 192.0 - 65.0);
 	}
 
 	sig.strength.stat[1].scale = VT_SCALE_RELATIVE; // 0-100% as 0-65535
-	sig.strength.stat[1].u.uvalue = signallevel * 257;
+	sig.strength.stat[1].u.uvalue = level * 257;
 
 	sig.cnr.len = 1;
 	// quality 15-0
 
 	// missing conversion from 15 to 0 into decibel values...
-
 	sig.cnr.stat[0].scale = VT_SCALE_RELATIVE; // 0-100% as 0-65535
 	sig.cnr.stat[0].u.uvalue = quality * 65535 / 15; 
 	
@@ -128,25 +124,13 @@ static void rtp_data(int fd, t_satip_rtp_last *last, unsigned char* buffer, int 
 				if (act_signallevel!=last->signallevel) update_status=1;
 				last->signallevel=act_signallevel;
 			}
-			if (nr==2) {
-				// Fronend lock
-				unsigned char act_status=FE_HAS_SIGNAL;
-				if (token[0]=='1') act_status = (FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK);
-				if (act_status!=last->status) update_status=1;
-				last->status=act_status;
-			}
 			if (nr==3) {
 				// Quality (0-15)
 				int act_quality=atoi(token);
 				if (act_quality!=last->quality) update_status=1;
 				last->quality=act_quality;
 			}
-			if (nr==4) {
-				// frequency
-				int act_freq=atoi(token);
-				if (act_freq!=last->freq) update_status=1;
-				last->freq=act_freq;
-			}
+			if (nr>5) break;
 			nr++;
 		  }
 		}
@@ -159,8 +143,8 @@ static void rtp_data(int fd, t_satip_rtp_last *last, unsigned char* buffer, int 
 	}
 
       if (update_status) {
-	      DEBUG(MSG_NET,"RTCP: update status=%i signallevel=%i quality=%i\n",last->status,last->signallevel,last->quality);
-	      set_status(fd, last->status, last->signallevel, last->quality);
+	      DEBUG(MSG_NET,"RTCP: update signallevel=%i quality=%i\n",last->signallevel,last->quality);
+	      set_signal(fd, last->signallevel, last->quality);
 	      update_status=0;
       }
 
@@ -329,8 +313,6 @@ t_satip_rtp*  satip_rtp_new(int fd, int fixed_rtp_port)
 
   srtp->last.signallevel = 0;
   srtp->last.quality = 0;
-  srtp->last.freq = 0;
-  srtp->last.status = 0;
 
   pthread_create( &srtp->thread, NULL, rtp_receiver, srtp);
 

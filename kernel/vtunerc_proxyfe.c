@@ -71,15 +71,12 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, enum fe_status *stat
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 
-	*status = ctx->signal.status;
+	*status = ctx->status;
 	return 0;
 }
 
 static int dvb_proxyfe_read_ber(struct dvb_frontend *fe, u32 *ber)
 {
-	//struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	//struct vtunerc_ctx *ctx = state->ctx;
-
 	*ber = 0;
 	return 0;
 }
@@ -116,9 +113,6 @@ static int dvb_proxyfe_read_snr(struct dvb_frontend *fe, u16 *snr)
 
 static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 {
-	//struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	//struct vtunerc_ctx *ctx = state->ctx;
-
 	*ucblocks = 0;
 	return 0;
 }
@@ -172,9 +166,9 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe)
 	if (memcmp(&msg.body.fe_params, &ctx->fe_params, sizeof(struct fe_params))!=0) {
 
 		ctx->stat_time = ktime_get_seconds();
-		ctx->signal.status = FE_NONE;
+		ctx->status = FE_NONE;
 
-		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE (internal)\n");
+		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE\n");
 
 		msg.type = MSG_SET_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
