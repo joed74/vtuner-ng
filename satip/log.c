@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <time.h>
 
 #define MAX_MSGSIZE 1024
 #include "log.h"
@@ -39,7 +40,6 @@ void write_message(const unsigned int mtype, const int level, const char* fmt, .
     return;
 
   if( level <= dbg_level ) {
-
     char tn[MAX_MSGSIZE];
     va_list ap;
     va_start(ap, fmt);
@@ -57,7 +57,12 @@ void write_message(const unsigned int mtype, const int level, const char* fmt, .
       }
       syslog(priority, "%s", msg);
     } else {
-      fprintf(stderr, "%s", msg);
+      char buff[20];
+      struct tm *sTm;
+      time_t now = time(0);
+      sTm = localtime(&now);
+      strftime (buff, sizeof(buff), "%b %d %H:%M:%S", sTm);
+      fprintf(stderr, "%s %s", buff, msg);
     }
 
     if(udplog_fd > -1 && udplog_enabled)
