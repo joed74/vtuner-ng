@@ -70,12 +70,13 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 	struct vtuner_message msg;
 	struct dvb_demux_feed *entry;
 	u16 stdpids[]={0,16,17,18,19,20};
-	int i,x;
+	int i,x, has_ts;
 
 	if (retune) mutex_lock(&ctx->demux.mutex);
 
 	dprintk(ctx,"MSG_PIDLIST%s", retune ? " (DTV_TUNE)" : "");
 
+	has_ts=0;
 	memset(&msg.body.pidlist,0xff,sizeof(msg.body.pidlist));
 	list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
 		if (entry->state == DMX_STATE_GO || entry->state == DMX_STATE_READY) {
@@ -88,17 +89,20 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 			if (entry->pid==20) stdpids[5]=PID_UNKNOWN;
 			dprintk_cont(ctx," %i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
 			if (retune) entry->pusi_seen=0;
+			if (entry->type == DMX_TYPE_TS) has_ts=1;
 		}
 	}
-	// add standard pids
-	x=0;
-	for (i=0; i<MAX_PIDTAB_LEN; i++) {
-		while (stdpids[x] == PID_UNKNOWN && x<=5) x++;
-		if (x>5) break;
-		if (msg.body.pidlist[i] == PID_UNKNOWN) {
-			msg.body.pidlist[i]=stdpids[x];
-			dprintk_cont(ctx, " %is", stdpids[x]);
-			x++;
+	if (has_ts) {
+		// add standard pids
+		x=0;
+		for (i=0; i<MAX_PIDTAB_LEN; i++) {
+			while (x<=5 && stdpids[x] == PID_UNKNOWN) x++;
+			if (x>5) break;
+			if (msg.body.pidlist[i] == PID_UNKNOWN) {
+				msg.body.pidlist[i]=stdpids[x];
+				dprintk_cont(ctx, " %is", stdpids[x]);
+				x++;
+			}
 		}
 	}
 	dprintk_cont(ctx, "\n");
