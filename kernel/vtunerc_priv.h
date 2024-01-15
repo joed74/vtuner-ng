@@ -45,6 +45,11 @@ struct vtunerc_config {
 	int devices;
 };
 
+struct vtunerc_feedinfo {
+	int id;
+	int subid;
+};
+
 struct vtunerc_ctx {
 
 	/* DVB api */

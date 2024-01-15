@@ -37,8 +37,9 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct dvb_demux *demux = &ctx->demux;
 	int tailsize = len % 188;
 	unsigned short pid;
-	int i, idx, cc;
+	int i, idx, cc, offs, pf, pesh;
 	bool sendfiller, pusi;
+	struct vtunerc_feedinfo *fi;
 
 	if (len < 188) {
 		printk(KERN_ERR "vtunerc%d: Data is shorter then TS packet size (%lu < 188)\n", ctx->idx, len);
@@ -94,13 +95,17 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			sendfiller=1;
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
+				fi = (struct vtunerc_feedinfo *) ctx->demux.feed[idx].priv;
 				if (!(ctx->status & FE_HAS_LOCK) && ctx->demux.feed[idx].type==DMX_TYPE_TS) {
 					dprintk(ctx, "set signal LOCK\n");
 					ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
 				}
 				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
-				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) sendfiller=0; // packet ist already a filler
-				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->demux.feed[idx].pusi_seen)) {
+				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) {
+					fi->id = 0; // internal for filler
+					sendfiller=0; // packet ist already a filler
+				}
+				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->demux.feed[idx].pusi_seen || fi->id == 0)) {
 					cc = ctx->kernel_buf[i+3] & 0x0f;
 					dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
 					cc = cc - 1;
@@ -108,6 +113,26 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 					ctx->demux.feed[idx].cc = cc;
 					pusi = 1;
 					sendfiller=0;
+
+					offs = 4;
+					if ((ctx->kernel_buf[i+3] & 0x30)==0x30) offs+=ctx->kernel_buf[i+4]+1;
+					if (offs>0 && offs<182) {
+						if (ctx->kernel_buf[i+offs]==0 && ctx->kernel_buf[i+offs+1]==0 && ctx->kernel_buf[i+offs+2]==1) {
+							// PES
+							fi->id = ctx->kernel_buf[i+offs+3];
+							if (fi->id == 0xbd) {
+								pesh=0;
+								if ((ctx->kernel_buf[i+offs+6] & 0xC0)==0x80) pesh=ctx->kernel_buf[i+offs+8]+3;
+								if (ctx->kernel_buf[i+offs+pesh+6]==0x0b && ctx->kernel_buf[i+offs+pesh+7]==0x77) fi->subid=0x6a;
+								if (ctx->kernel_buf[i+offs+pesh+6]==0x20) fi->subid=0x59;
+							}
+						} else {
+							// PSI
+							pf = ctx->kernel_buf[i+offs];
+							if (offs+1+pf<188)
+								fi->id = ctx->kernel_buf[i+offs+1+pf];
+						}
+					}
 				}
 			}
 
@@ -190,7 +215,6 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	/* set FAKE response, to allow finish any waiters
 	   in vtunerc_ctrldev_xchange_message() */
 	ctx->ctrldev_response.type = 0;
-	dprintk(ctx, "faked response\n");
 	wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
 
 	if (ctx->fd_opened == 0) {

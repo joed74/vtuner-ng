@@ -117,6 +117,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
+	struct vtunerc_feedinfo *fi;
 
 	// called with demux mutex already locked
 
@@ -135,6 +136,15 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	  return -EINVAL;
 	}
 
+	feed->priv = kmalloc(sizeof(struct vtunerc_feedinfo),GFP_KERNEL);
+	if (!feed->priv) {
+	   printk(KERN_ERR "vtunerc%d: out of memory\n", ctx->idx);
+	   return -ENOMEM;
+	}
+	fi = (struct vtunerc_feedinfo *) feed->priv;
+	fi->id = -1;
+	fi->subid = -1;
+
 	ctx->adapter_inuse = 1;
 
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
@@ -149,8 +159,12 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
 
-	// called with demux mutex already locked
+	if (feed->priv) {
+                kfree(feed->priv);
+		feed->priv = NULL;
+	}
 
+	// called with demux mutex already locked
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "del pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	feed->state = DMX_STATE_ALLOCATED; // we must set this here!
@@ -368,29 +382,79 @@ static void inversion2str(struct seq_file *seq, enum fe_spectral_inversion inver
 	seq_puts(seq, "\n");
 }
 
-static void sectiontable2str(struct seq_file *seq, unsigned short pid)
+static void pes2str(struct seq_file *seq, int id, int subid)
 {
-	switch (pid) {
+	if (id>=0xC0 && id<=0xDF) {
+		seq_printf(seq, "-AUD%i", id-0xC0);
+	} else if (id>=0xE0 && id<=0xEF) {
+		seq_printf(seq, "-VID%i", id-0xE0);
+	} else if (id==0xBD) {
+		switch (subid) {
+                  case 0x56:
+	            seq_puts(seq, "-TXT");
+		    break;
+		  case 0x59:
+		    seq_puts(seq, "-SUB");
+		    break;
+		  case 0x6a:
+		    seq_puts(seq, "-AC3");
+                    break;
+		  default:
+		    seq_puts(seq, "-PS1");
+		}
+	} else if (id==0) {
+		seq_printf(seq, "-FIL");
+	} else if (id!=-1) {
+		seq_printf(seq, "-%it", id);
+	}
+}
+
+static void sectiontable2str(struct seq_file *seq, int id)
+{
+	switch (id) {
+		case -1:
+		  // not initialized yet
+		  break;
 		case 0:
-		  seq_puts(seq, " PAT");
+		  seq_puts(seq, "-PAT");
 		  break;
-		case 16:
-		  seq_puts(seq, " NIT");
+		case 2:
+		  seq_puts(seq, "-PMT");
 		  break;
-		case 17:
-		  seq_puts(seq, " SDT");
+		case 64:
+		case 65:
+		  seq_puts(seq, "-NIT");
 		  break;
-		case 18:
-		  seq_puts(seq, " EIT");
+		case 66:
+		case 70:
+		  seq_puts(seq, "-SDT");
 		  break;
-		case 19:
-		  seq_puts(seq, " RST");
+		case 78:
+		case 79:
+		case 80:
+		case 81:
+		case 82:
+		case 83:
+		case 84:
+		case 96:
+		case 97:
+		case 98:
+		  seq_puts(seq, "-EIT");
 		  break;
-		case 20:
-		  seq_puts(seq, " TDT");
+		case 112:
+		  seq_puts(seq, "-TDT");
+		  break;
+		case 113:
+		  seq_puts(seq, "-RST");
+		  break;
+		case 114:
+		  seq_puts(seq, "-ST");
+		  break;
+		case 115:
+		  seq_puts(seq, "-TOT");
 		  break;
 		default:
-		  seq_printf(seq, " %is", pid);
+		  seq_printf(seq, "-%is", id);
 	}
 }
 
@@ -398,6 +462,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
 	int pcnt = 0;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
+	struct vtunerc_feedinfo *fi;
 	struct dvb_demux_feed *entry;
 
 	seq_printf(seq, "[vtunerc driver, version " VTUNERC_MODULE_VERSION "]\n");
@@ -429,10 +494,12 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			mutex_lock(&ctx->demux.mutex);
 			list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
 				if (entry->state == DMX_STATE_READY || entry->state == DMX_STATE_GO) {
+					fi = (struct vtunerc_feedinfo *) entry->priv;
+					seq_printf(seq," %i", entry->pid);
 					if (entry->type==DMX_TYPE_SEC) {
-						sectiontable2str(seq, entry->pid);
+						sectiontable2str(seq, fi->id);
 					} else {
-						seq_printf(seq," %i", entry->pid);
+						pes2str(seq, fi->id, fi->subid);
 					}
 					if (entry->pusi_seen) seq_printf(seq, "*");
 					pcnt++;
