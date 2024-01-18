@@ -57,11 +57,16 @@ struct diseqc_master_cmd {
 	u8 msg_len;
 } __attribute__ ((packed));
 
+struct burst_cmd {
+	u8 value;
+	u8 valid;
+} __attribute__ ((packed));
+
 struct sat_params {
 	u8	tone;
 	u8	voltage;
 	struct	diseqc_master_cmd diseqc_master_cmd;
-	u8	burst;
+	struct  burst_cmd burst_cmd;
 } __attribute__ ((packed));
 
 struct fe_params {

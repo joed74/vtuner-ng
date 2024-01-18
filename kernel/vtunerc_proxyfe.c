@@ -169,7 +169,12 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 		ctx->status = FE_NONE;
 		*status = FE_NONE;
 
-		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE\n");
+		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE");
+		if (c->delivery_system == SYS_DVBS || c->delivery_system == SYS_DVBS2) {
+			if (msg.body.fe_params.u.qpsk.sat.burst_cmd.valid) dprintk_cont(ctx, ", with BURST");
+			if (msg.body.fe_params.u.qpsk.sat.diseqc_master_cmd.msg_len>0) dprintk_cont(ctx, ", with DISEQC");
+		}
+		dprintk_cont(ctx,"\n");
 
 		msg.type = MSG_SET_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
@@ -239,7 +244,8 @@ static int dvb_proxyfe_send_diseqc_burst(struct dvb_frontend *fe, enum fe_sec_mi
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 
-	ctx->fe_params.u.qpsk.sat.burst = burst;
+	ctx->fe_params.u.qpsk.sat.burst_cmd.value = burst;
+	ctx->fe_params.u.qpsk.sat.burst_cmd.valid = 1;
 	return 0;
 }
 

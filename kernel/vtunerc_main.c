@@ -402,7 +402,7 @@ static void pes2str(struct seq_file *seq, int id, int subid)
 		  default:
 		    seq_puts(seq, "-PS1");
 		}
-	} else if (id==0) {
+	} else if (id==-2) {
 		seq_printf(seq, "-FIL");
 	} else if (id!=-1) {
 		seq_printf(seq, "-%it", id);

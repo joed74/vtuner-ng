@@ -238,6 +238,8 @@ int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversio
 
 int satip_set_position(t_satip_config* cfg, int position)
 {
+  if (position>0) DEBUG(MSG_NET,"SAT %i\n", position);
+  if (position<=0) position=1; // default position
   cfg->position = position;
   return SATIPCFG_OK;
 }

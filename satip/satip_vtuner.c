@@ -72,7 +72,7 @@ t_satip_vtuner* satip_vtuner_new(char* devname,char *delsys,t_satip_config* sati
   vt->satip_cfg=satip_cfg;
 
   /* set default position A, if appl. does not configure */
-  satip_set_position(satip_cfg,1);
+  satip_set_position(satip_cfg, 0);
 
   if (delsys!=NULL) {
     // set delivery systems
@@ -115,6 +115,16 @@ static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_me
        cmd->msg[2] == 0x38 &&
        cmd->msg_len == 4 )
     {
+      sprintf(dbg,"%02X %02X %02X   msg %02X %02X %02X len %d",
+	  cmd->msg[0],
+	  cmd->msg[1],
+	  cmd->msg[2],
+	  cmd->msg[3],
+	  cmd->msg[4],
+	  cmd->msg[5],
+	  cmd->msg_len);
+       DEBUG(MSG_NET,"DISEQC %s\n",dbg);
+
       /* committed switch */
       u8 data=cmd->msg[3];
 
@@ -134,17 +144,6 @@ static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_me
 
       /* some invalid combinations ? */
       satip_set_position(vt->satip_cfg, ( (data & 0x0c) >> 2) + 1 );
-
-
-      sprintf(dbg,"%02x %02x %02x   msg %02x %02x %02x len %d",
-	  cmd->msg[0],
-	  cmd->msg[1],
-	  cmd->msg[2],
-	  cmd->msg[3],
-	  cmd->msg[4],
-	  cmd->msg[5],
-	  cmd->msg_len);
-       DEBUG(MSG_MAIN,"MSG_SEND_DISEQC_MSG:  %s\n",dbg);
     }
   else
     {
@@ -153,10 +152,16 @@ static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_me
       else if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_18)
 	ret = SATIPCFG_P_HORIZONTAL;
     }
-  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_A)
-     satip_set_position(vt->satip_cfg,1);
-  if (msg->body.fe_params.u.qpsk.sat.burst == SEC_MINI_B)
-     satip_set_position(vt->satip_cfg,2);
+  if (msg->body.fe_params.u.qpsk.sat.burst_cmd.valid) {
+     if (msg->body.fe_params.u.qpsk.sat.burst_cmd.value == SEC_MINI_A) {
+        DEBUG(MSG_NET,"BURST SEC_MINI_A\n");
+        satip_set_position(vt->satip_cfg,1);
+     }
+     if (msg->body.fe_params.u.qpsk.sat.burst_cmd.value == SEC_MINI_B) {
+        DEBUG(MSG_NET,"BURST SEC_MINI_B\n");
+        satip_set_position(vt->satip_cfg,2);
+     }
+  }
   return ret;
 }
 

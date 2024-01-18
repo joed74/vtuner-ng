@@ -101,11 +101,11 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 					ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
 				}
 				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
-				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7)) {
-					fi->id = 0; // internal for filler
+				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
+					fi->id = -2; // internal for filler
 					sendfiller=0; // packet ist already a filler
 				}
-				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->demux.feed[idx].pusi_seen || fi->id == 0)) {
+				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
 					cc = ctx->kernel_buf[i+3] & 0x0f;
 					dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
 					cc = cc - 1;
