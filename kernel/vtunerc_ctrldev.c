@@ -196,7 +196,7 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 	ctx = filp->private_data = vtunerc_get_ctx(minor);
 	if (ctx == NULL)
 		return -ENOMEM;
-
+	if (ctx->fd_opened == 0) dvb_proxyfe_set_delsys_info(ctx->fe);
 	ctx->fd_opened++;
 	return 0;
 }
@@ -225,14 +225,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->stat_fe_data = 0;
 		memset(&ctx->signal,0,sizeof(struct vtuner_signal));
 		ctx->fe_params.delivery_system=0; // now retune can happen
-		memset(&ctx->fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
-		ctx->fe->ops.delsys[0]=SYS_DVBT;
-		ctx->fe->ops.delsys[1]=SYS_DVBT2;
-		ctx->fe->ops.delsys[2]=SYS_DVBC_ANNEX_A;
-		ctx->fe->ops.delsys[3]=SYS_DVBC_ANNEX_B;
-		ctx->fe->ops.delsys[4]=SYS_DVBC_ANNEX_C;
-		ctx->fe->ops.delsys[5]=SYS_DVBS;
-		ctx->fe->ops.delsys[6]=SYS_DVBS2;
+		dvb_proxyfe_clear_delsys_info(ctx->fe);
 	}
 	return 0;
 }

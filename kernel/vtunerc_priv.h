@@ -104,6 +104,8 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_messa
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid);
 void send_pidlist(struct vtunerc_ctx *ctx, bool retune);
 void dvb_proxyfe_set_signal(struct vtunerc_ctx *ctx);
+void dvb_proxyfe_set_delsys_info(struct dvb_frontend *fe);
+void dvb_proxyfe_clear_delsys_info(struct dvb_frontend *fe);
 #define dprintk(ctx, fmt, arg...) do {				\
 if (ctx->config && (ctx->config->debug))			\
 	printk(KERN_DEBUG "vtunerc%d: " fmt, ctx->idx, ##arg);	\

@@ -295,22 +295,51 @@ static struct dvb_frontend *dvb_proxyfe_attach(struct vtunerc_ctx *ctx)
 	return fe;
 }
 
-static struct dvb_frontend_ops dvb_proxyfe_ops = {
-        .delsys = { SYS_DVBT, SYS_DVBT2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_B, SYS_DVBC_ANNEX_C, SYS_DVBS, SYS_DVBS2 },
-	.info = {
-		.name			= "vTuner proxyFE DVB-Multi",
-		.frequency_min_hz	= 51 * MHz,
-		.frequency_max_hz	= 2150 * MHz,
-		.frequency_stepsize_hz	= 62.5 * kHz,
-		.frequency_tolerance_hz	= 29500 * kHz,
-		.symbol_rate_min	= 450000,
-		.symbol_rate_max	= 45000000,
-		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |
+void dvb_proxyfe_clear_delsys_info(struct dvb_frontend *fe)
+{
+	memset(&fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
+	fe->ops.delsys[0] = SYS_TURBO;
+	fe->ops.info.frequency_min_hz       = 0;
+	fe->ops.info.frequency_max_hz       = 0;
+	fe->ops.info.frequency_stepsize_hz  = 0;
+	fe->ops.info.frequency_tolerance_hz = 0;
+	fe->ops.info.symbol_rate_min        = 0;
+	fe->ops.info.symbol_rate_max        = 0;
+
+	fe->ops.info.caps                   = 0;
+}
+
+void dvb_proxyfe_set_delsys_info(struct dvb_frontend *fe)
+{
+	memset(&fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
+	fe->ops.delsys[0] = SYS_DVBT;
+	fe->ops.delsys[1] = SYS_DVBT2;
+	fe->ops.delsys[2] = SYS_DVBC_ANNEX_A;
+	fe->ops.delsys[3] = SYS_DVBC_ANNEX_B;
+	fe->ops.delsys[4] = SYS_DVBC_ANNEX_C;
+	fe->ops.delsys[5] = SYS_DVBS;
+	fe->ops.delsys[6] = SYS_DVBS2;
+
+	fe->ops.info.frequency_min_hz       = 51 * MHz;
+	fe->ops.info.frequency_max_hz       = 2150 * MHz;
+	fe->ops.info.frequency_stepsize_hz  = 62.5 * kHz;
+	fe->ops.info.frequency_tolerance_hz = 29500 * kHz;
+	fe->ops.info.symbol_rate_min        = 450000;
+	fe->ops.info.symbol_rate_max        = 45000000;
+
+	fe->ops.info.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 | FE_CAN_FEC_4_5 |
 			FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 | FE_CAN_FEC_7_8 | FE_CAN_FEC_8_9 | FE_CAN_QPSK | FE_CAN_RECOVER |
 			FE_CAN_FEC_AUTO | FE_CAN_QAM_16 | FE_CAN_QAM_32 | FE_CAN_QAM_64 | FE_CAN_QAM_128 | FE_CAN_QAM_256 | 
 			FE_CAN_QAM_AUTO | FE_CAN_8VSB | FE_CAN_16VSB | FE_CAN_TRANSMISSION_MODE_AUTO |
 			FE_CAN_GUARD_INTERVAL_AUTO | FE_CAN_HIERARCHY_AUTO | FE_CAN_FEC_AUTO |
-			FE_CAN_INVERSION_AUTO | FE_CAN_2G_MODULATION | FE_CAN_TURBO_FEC | FE_CAN_MULTISTREAM
+			FE_CAN_INVERSION_AUTO | FE_CAN_2G_MODULATION | FE_CAN_TURBO_FEC | FE_CAN_MULTISTREAM;
+
+}
+
+static struct dvb_frontend_ops dvb_proxyfe_ops = {
+	.delsys = { SYS_TURBO },
+	.info = {
+		.name			= "vTuner proxyFE DVB-Multi",
 	},
 
 	.release = dvb_proxyfe_release,
