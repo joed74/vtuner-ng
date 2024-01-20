@@ -218,6 +218,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
 
 	if (ctx->fd_opened == 0) {
+		ctx->status = FE_NONE;
 		ctx->stat_time = 0;
 		ctx->stat_wr_data = 0;
 		ctx->stat_fi_data = 0;
