@@ -215,6 +215,11 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
   }
 }
 
+static void close_frontend(struct satip_vtuner *vt)
+{
+  satip_close(vt->satip_cfg);
+}
+
 static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
   int i;
@@ -246,6 +251,10 @@ void satip_vtuner_event(struct satip_vtuner* vt)
     {
     case MSG_SET_FRONTEND:
       set_frontend(vt,&msg);
+      break;
+
+    case MSG_CLOSE_FRONTEND:
+      close_frontend(vt);
       break;
 
     case MSG_PIDLIST:

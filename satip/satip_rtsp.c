@@ -124,7 +124,6 @@ static void reset_connection(t_satip_rtsp* rtsp)
   rtsp->rxbuf_pos=0;
   rtsp->rxbuf[0]=0;
 
-
   if (rtsp->timer != NULL)
     {
       polltimer_cancel(rtsp->timer_queue,rtsp->timer);
@@ -712,9 +711,13 @@ void  satip_rtsp_check_update(struct satip_rtsp*  rtsp, int abort)
 	       satip_pid_update_required(rtsp->satip_config)) 
 	    send_request(rtsp, RTSP_READY, RTSP_REQ_PLAY, send_play);
 
-//	  else if ( !satip_valid_config(rtsp->satip_config) )
-//	    send_request(rtsp, RTSP_READY, RTSP_REQ_TEARDOWN, send_teardown);
-	}
+	  if ( satip_close_requested(rtsp->satip_config) )
+	  {
+	    send_request(rtsp, RTSP_NOCONFIG, RTSP_REQ_TEARDOWN, send_teardown);
+            reset_connection(rtsp);
+	    rtsp->satip_config->status = SATIPCFG_INCOMPLETE;
+	  }
+        }
       break;
 
     case RTSP_ABORTING:

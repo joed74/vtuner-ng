@@ -22,6 +22,7 @@
 #include <linux/dvb/dmx.h>
 
 #define MSG_SET_FRONTEND		10
+#define MSG_CLOSE_FRONTEND		11
 #define MSG_PIDLIST			20
 
 #define MAX_PIDTAB_LEN			30

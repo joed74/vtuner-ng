@@ -83,6 +83,7 @@ static void pidupdate_status(t_satip_config* cfg)
 
     case SATIPCFG_CHANGED:
     case SATIPCFG_INCOMPLETE:
+    case SATIPCFG_CLOSING:
       break;
     }
 }
@@ -244,12 +245,20 @@ int satip_set_position(t_satip_config* cfg, int position)
   return SATIPCFG_OK;
 }
 
+void satip_close(t_satip_config *cfg)
+{
+  cfg->status = SATIPCFG_CLOSING;
+}
 
 int satip_valid_config(t_satip_config* cfg)
 {
   return ( cfg->status != SATIPCFG_INCOMPLETE );
 }
 
+int satip_close_requested(t_satip_config* cfg)
+{
+  return ( cfg->status == SATIPCFG_CLOSING );
+}
 
 int satip_tuning_required(t_satip_config* cfg)
 {

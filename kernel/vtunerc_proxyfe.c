@@ -197,19 +197,33 @@ static int dvb_proxyfe_sleep(struct dvb_frontend *fe)
 
 static int dvb_proxyfe_init(struct dvb_frontend *fe)
 {
+	return 0;
+}
+
+static int dvb_proxyfe_ts_bus_ctrl(struct dvb_frontend *fe, int aquire)
+{
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
-	dprintk(ctx, "init\n");
-	ctx->adapter_inuse=1;
+	struct vtuner_message msg;
+
+	ctx->adapter_inuse=aquire;
+	if (aquire==0 && ctx->fe_params.frequency) {
+		ctx->status = FE_NONE;
+		dprintk(ctx, "MSG_CLOSE_FRONTEND\n");
+		memset(&msg, 0, sizeof(msg));
+		msg.type = MSG_CLOSE_FRONTEND;
+		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
+		memset(&ctx->fe_params,0,sizeof(struct fe_params));
+		ctx->stat_time = 0;
+		ctx->stat_wr_data = 0;
+		ctx->stat_fi_data = 0;
+		ctx->stat_fe_data = 0;
+	}
 	return 0;
 }
 
 static void dvb_proxyfe_detach(struct dvb_frontend *fe)
 {
-	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *ctx = state->ctx;
-	dprintk(ctx, "detach\n");
-	ctx->adapter_inuse=0;
 }
 
 static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode tone)
@@ -320,6 +334,8 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 
 	.diseqc_send_master_cmd = dvb_proxyfe_send_diseqc_msg,
 	.diseqc_send_burst = dvb_proxyfe_send_diseqc_burst,
+
+	.ts_bus_ctrl = dvb_proxyfe_ts_bus_ctrl,
 };
 
 int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx)

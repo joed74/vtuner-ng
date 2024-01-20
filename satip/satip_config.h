@@ -74,7 +74,8 @@ typedef enum
     SATIPCFG_INCOMPLETE = 0, /* parameters are missing */
     SATIPCFG_PID_CHANGED,    /* only PIDs were touched, allows for "PLAY" with addpid/delpids */
     SATIPCFG_CHANGED,        /* requires new tuning */
-    SATIPCFG_SETTLED         /* configuration did not change since last access */
+    SATIPCFG_SETTLED,         /* configuration did not change since last access */
+    SATIPCFG_CLOSING,
   } t_satip_config_status;
 
 
@@ -106,7 +107,7 @@ typedef struct satip_config
   /* delta info for addpids/delpids cmd */
   unsigned short    mod_pid[SATIPCFG_MAX_PIDS];
 
-  /* postion? */
+  /* sat number as position  */
   int position;
 } t_satip_config;
 
@@ -141,5 +142,7 @@ int satip_prepare_pids(t_satip_config* cfg, char* str, int maxlen,int modpid);
 int satip_settle_config(t_satip_config* cfg);
 void satip_clear_config(t_satip_config* cfg);
 
+void satip_close(t_satip_config* cfg);
+int satip_close_requested(t_satip_config* cfg);
 #endif
 

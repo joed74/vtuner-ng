@@ -145,8 +145,6 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	fi->id = -1;
 	fi->subid = -1;
 
-	ctx->adapter_inuse = 1;
-
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "add pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	feed->pusi_seen = 0;
