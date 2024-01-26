@@ -93,13 +93,13 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			ctx->stat_fe_data += 188; // external filler
 		} else {
 			sendfiller=1;
+			if (!(ctx->status & FE_HAS_LOCK)) {
+				dprintk(ctx, "set signal LOCK\n");
+				ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // TS packets -> we habe a lock!
+			}
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
 				fi = (struct vtunerc_feedinfo *) ctx->demux.feed[idx].priv;
-				if (!(ctx->status & FE_HAS_LOCK) && ctx->demux.feed[idx].type==DMX_TYPE_TS) {
-					dprintk(ctx, "set signal LOCK\n");
-					ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // no filler, ts stream -> we have a lock!
-				}
 				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
 				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
 					fi->id = -2; // internal for filler

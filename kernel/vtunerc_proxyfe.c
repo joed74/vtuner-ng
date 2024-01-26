@@ -299,8 +299,8 @@ void dvb_proxyfe_clear_delsys_info(struct dvb_frontend *fe)
 {
 	memset(&fe->ops.delsys,0,sizeof(u8)*MAX_DELSYS);
 	fe->ops.delsys[0] = SYS_TURBO;
-	fe->ops.info.frequency_min_hz       = 0;
-	fe->ops.info.frequency_max_hz       = 0;
+	fe->ops.info.frequency_min_hz       = 1 * MHz;
+	fe->ops.info.frequency_max_hz       = 2 * MHz;
 	fe->ops.info.frequency_stepsize_hz  = 0;
 	fe->ops.info.frequency_tolerance_hz = 0;
 	fe->ops.info.symbol_rate_min        = 0;
@@ -340,6 +340,8 @@ static struct dvb_frontend_ops dvb_proxyfe_ops = {
 	.delsys = { SYS_TURBO },
 	.info = {
 		.name			= "vTuner proxyFE DVB-Multi",
+		.frequency_min_hz	= 1 * MHz,
+		.frequency_max_hz	= 2 * MHz
 	},
 
 	.release = dvb_proxyfe_release,
