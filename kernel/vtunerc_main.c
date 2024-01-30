@@ -114,7 +114,6 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
-	struct vtunerc_feedinfo *fi;
 
 	// called with demux mutex already locked
 
@@ -133,14 +132,8 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	  return -EINVAL;
 	}
 
-	feed->priv = kmalloc(sizeof(struct vtunerc_feedinfo),GFP_KERNEL);
-	if (!feed->priv) {
-	   printk(KERN_ERR "vtunerc%d: out of memory\n", ctx->idx);
-	   return -ENOMEM;
-	}
-	fi = (struct vtunerc_feedinfo *) feed->priv;
-	fi->id = -1;
-	fi->subid = -1;
+	ctx->feedinfo[feed->index].id = -1;
+	ctx->feedinfo[feed->index].subid = -1;
 
 	feed->pusi_seen = 0;
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
@@ -153,11 +146,6 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
-
-	if (feed->priv) {
-                kfree(feed->priv);
-		feed->priv = NULL;
-	}
 
 	// called with demux mutex already locked
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
@@ -489,7 +477,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			mutex_lock(&ctx->demux.mutex);
 			list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
 				if (entry->state == DMX_STATE_READY || entry->state == DMX_STATE_GO) {
-					fi = (struct vtunerc_feedinfo *) entry->priv;
+					fi = (struct vtunerc_feedinfo *) &ctx->feedinfo[entry->index];
 					seq_printf(seq," %i", entry->pid);
 					if (entry->type==DMX_TYPE_SEC) {
 						sectiontable2str(seq, fi->id);

@@ -99,7 +99,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
-				fi = (struct vtunerc_feedinfo *) ctx->demux.feed[idx].priv;
+				fi = (struct vtunerc_feedinfo *) &ctx->feedinfo[idx];
 				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
 				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
 					fi->id = -2; // internal for filler

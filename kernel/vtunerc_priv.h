@@ -65,6 +65,7 @@ struct vtunerc_ctx {
 	struct vtunerc_config *config;
 	struct vtuner_signal signal;
 	struct fe_params fe_params;
+	struct vtunerc_feedinfo feedinfo[MAX_PIDTAB_LEN];
 
 	u8 status;
 
