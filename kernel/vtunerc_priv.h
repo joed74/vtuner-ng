@@ -80,14 +80,15 @@ struct vtunerc_ctx {
 	unsigned char *kernel_buf;
 	ssize_t kernel_buf_size;
 
+	void *mem;
+	struct dvb_ringbuffer rbuf;
+
 	/* ctrldev */
 	int noresponse;
 	struct vtuner_message ctrldev_request;
 	struct vtuner_message ctrldev_response;
 	wait_queue_head_t ctrldev_wait_request_wq;
 	wait_queue_head_t ctrldev_wait_response_wq;
-	int nextpacket;
-	wait_queue_head_t ctrldev_wait_packet_wq;
 
 	/* proc statistics */
 	unsigned long stat_wr_data;

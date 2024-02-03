@@ -35,9 +35,9 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	struct dvb_demux *demux = &ctx->demux;
-	int tailsize = len % 188;
+	struct dmx_section_feed *sec;
 	unsigned short pid;
-	int i, idx, cc, offs, pf, pesh;
+	int tailsize, i, cc, idx, offs, pf, pesh;
 	bool sendfiller, pusi;
 	struct vtunerc_feedinfo *fi;
 
@@ -46,11 +46,12 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		return -EINVAL;
 	}
 
-	len -= tailsize;
-
 	if (down_interruptible(&ctx->tswrite_sem)) {
 		return -ERESTARTSYS;
 	}
+
+	tailsize = len % 188;
+	len -= tailsize;
 
 	// new buffer need to be allocated ?
 	if ((ctx->kernel_buf == NULL) || (len > ctx->kernel_buf_size)) {
@@ -92,7 +93,8 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		if (pid==0x1fff) {
 			ctx->stat_fe_data += 188; // external filler
 		} else {
-			sendfiller=1;
+			cc = ctx->kernel_buf[i+3] & 0x0f;
+			sendfiller = 1;
 			if (!(ctx->status & FE_HAS_LOCK)) {
 				dprintk(ctx, "set signal LOCK\n");
 				ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // TS packets -> we habe a lock!
@@ -100,38 +102,47 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
 				fi = (struct vtunerc_feedinfo *) &ctx->feedinfo[idx];
-				if (ctx->demux.feed[idx].pusi_seen) sendfiller=0; // pusi seen -> no filler
-				if ((ctx->kernel_buf[i+3] & 0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
-					fi->id = -2; // internal for filler
-					sendfiller=0; // packet ist already a filler
-				}
-				if ((ctx->kernel_buf[i+1] & 0x40) && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
-					cc = ctx->kernel_buf[i+3] & 0x0f;
-					dprintk(ctx, "found pusi for pid %i (cc=%i)\n", pid, cc);
-					cc = cc - 1;
-					if (cc == -1) cc = 15;
-					ctx->demux.feed[idx].cc = cc;
-					pusi = 1;
-					sendfiller=0;
-
+				pusi = (ctx->kernel_buf[i+1] & 0x40);
+				if (pusi) {
 					offs = 4;
 					if ((ctx->kernel_buf[i+3] & 0x30)==0x30) offs+=ctx->kernel_buf[i+4]+1;
-					if (offs>0 && offs<182) {
-						if (ctx->kernel_buf[i+offs]==0 && ctx->kernel_buf[i+offs+1]==0 && ctx->kernel_buf[i+offs+2]==1) {
-							// PES
+				}
+
+				if (((ctx->kernel_buf[i+3] & 0x20)==0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
+					fi->id = -2;
+					sendfiller = 0; // packet is already a filler
+				}
+
+				if (ctx->demux.feed[idx].type == DMX_TYPE_TS)
+				{
+					sendfiller = 0;
+					if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
+						dprintk(ctx,"found pusi for pid %it\n", pid);
+						// PES
+						if (offs>0 && offs<182 && (ctx->kernel_buf[i+offs]==0) && (ctx->kernel_buf[i+offs+1]==0) && (ctx->kernel_buf[i+offs+2]==1)) {
 							fi->id = ctx->kernel_buf[i+offs+3];
 							if (fi->id == 0xbd) {
 								pesh=0;
-								if ((ctx->kernel_buf[i+offs+6] & 0xC0)==0x80) pesh=ctx->kernel_buf[i+offs+8]+3;
-								if (ctx->kernel_buf[i+offs+pesh+6]==0x0b && ctx->kernel_buf[i+offs+pesh+7]==0x77) fi->subid=0x6a;
+								if ((ctx->kernel_buf[i+offs+6] & 0xC0)==0x80) pesh = ctx->kernel_buf[i+offs+8]+3;
+								if (ctx->kernel_buf[i+offs+pesh+6]==0x0B && ctx->kernel_buf[i+offs+pesh+7]==0x77) fi->subid=0x6a;
 								if (ctx->kernel_buf[i+offs+pesh+6]==0x20) fi->subid=0x59;
 							}
-						} else {
-							// PSI
-							pf = ctx->kernel_buf[i+offs];
-							if (offs+1+pf<188)
-								fi->id = ctx->kernel_buf[i+offs+1+pf];
 						}
+					}
+				}
+
+				if (ctx->demux.feed[idx].type == DMX_TYPE_SEC)
+				{
+					if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
+						dprintk(ctx,"found pusi for pid %is\n", pid);
+						// now start section feed
+						sec = &ctx->demux.feed[idx].feed.sec;
+						sec->is_filtering = 1;
+						ctx->demux.feed[idx].state = DMX_STATE_GO;
+						// PSI
+						pf = ctx->kernel_buf[i+offs];
+						if (offs+1+pf<188)
+							fi->id = ctx->kernel_buf[i+offs+1+pf];
 					}
 				}
 			}
@@ -139,7 +150,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			if (sendfiller) {
 				ctx->kernel_buf[i+1]=0x1F; // pid 0x1FFF
 				ctx->kernel_buf[i+2]=0xFF;
-				ctx->kernel_buf[i+3]=0x20; // only adaption
+				ctx->kernel_buf[i+3]=0x20+cc; // only adaption
 				ctx->kernel_buf[i+4]=0xB7; // adaption field length (whole packet)
 				ctx->kernel_buf[i+5]=0x00; // adaption fileds (none)
 				memset(&ctx->kernel_buf[i+6],0xff,182);
@@ -150,41 +161,36 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		if (idx > -1 && pusi) ctx->demux.feed[idx].pusi_seen=1;
 	}
 
+	if (waitqueue_active(&ctx->rbuf.queue)) {
+		dvb_ringbuffer_write(&ctx->rbuf, ctx->kernel_buf, len);
+		wake_up(&ctx->rbuf.queue);
+	}
+
 	ctx->stat_wr_data += len;
-
-	ctx->nextpacket = 1;
-	wake_up_interruptible(&ctx->ctrldev_wait_packet_wq);
-
 	up(&ctx->tswrite_sem);
-
-#ifdef CONFIG_PROC_FS
-	/* TODO:  analyze injected data for statistics */
-#endif
 
 	return len;
 }
 
-static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buff, size_t len, loff_t *off)
+static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
-	ssize_t ret = 0;
+	int left, avail;
 
-	if (wait_event_interruptible(ctx->ctrldev_wait_packet_wq, ctx->nextpacket != 0))
-	{
-		return -ERESTARTSYS;
+	left = count;
+	while (left) {
+		if (wait_event_interruptible(
+			    ctx->rbuf.queue,
+			    dvb_ringbuffer_avail(&ctx->rbuf) > 0) < 0)
+			return -EAGAIN;
+		avail = dvb_ringbuffer_avail(&ctx->rbuf);
+		if (avail > left)
+			avail = left;
+		dvb_ringbuffer_read_user(&ctx->rbuf, buf, avail);
+		left -= avail;
+		buf += avail;
 	}
-
-	if (ctx->nextpacket>0) {
-		if (len < ctx->kernel_buf_size) {
-			return -EINVAL;
-		}
-		if (copy_to_user(buff, ctx->kernel_buf, ctx->kernel_buf_size)) {
-			return -EINVAL;
-		}
-		ret = ctx->kernel_buf_size;
-	}
-	ctx->nextpacket = 0;
-	return ret;
+	return count;
 }
 
 static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
@@ -224,7 +230,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 		ctx->stat_fi_data = 0;
 		ctx->stat_fe_data = 0;
 		memset(&ctx->signal,0,sizeof(struct vtuner_signal));
-		ctx->fe_params.delivery_system=0; // now retune can happen
+		ctx->fe_params.delivery_system = 0; // now retune can happen
 		dvb_proxyfe_clear_delsys_info(ctx->fe);
 	}
 	return 0;
@@ -340,9 +346,13 @@ static unsigned int vtunerc_ctrldev_poll(struct file *filp, poll_table *wait)
 	unsigned int mask = 0;
 
 	poll_wait(filp, &ctx->ctrldev_wait_request_wq, wait);
+	poll_wait(filp, &ctx->rbuf.queue, wait);
+
+	if (!dvb_ringbuffer_empty(&ctx->rbuf))
+		mask |= EPOLLIN | EPOLLRDNORM;
 
 	if (ctx->ctrldev_request.type > -1) {
-		mask = POLLPRI;
+		mask |= POLLPRI;
 	}
 
 	return mask;

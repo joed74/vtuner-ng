@@ -128,6 +128,7 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 	if (c->frequency == 0) return -EINVAL;
 
 	memset(&msg, 0, sizeof(msg));
+
 	msg.body.fe_params.delivery_system = c->delivery_system;
 	msg.body.fe_params.frequency = c->frequency;
 

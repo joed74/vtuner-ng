@@ -86,8 +86,21 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 			if (entry->pid==18) stdpids[3]=PID_UNKNOWN;
 			if (entry->pid==19) stdpids[4]=PID_UNKNOWN;
 			if (entry->pid==20) stdpids[5]=PID_UNKNOWN;
-			dprintk_cont(ctx," %i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
-			if (retune) entry->pusi_seen=0;
+			dprintk_cont(ctx," r%i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
+			if (retune && entry->state == DMX_STATE_GO) {
+				if (entry->type == DMX_TYPE_SEC) {
+					// stop running section feed
+					entry->feed.sec.is_filtering = 0;
+					entry->feed.sec.secbuf = entry->feed.sec.secbuf_base;
+					entry->feed.sec.secbufp = entry->feed.sec.seclen = 0;
+					entry->feed.sec.tsfeedp = 0;
+					entry->state = DMX_STATE_READY;
+				}
+				entry->pusi_seen = 0;
+				entry->buffer_flags = 0;
+				ctx->feedinfo[entry->index].id = -1;
+				ctx->feedinfo[entry->index].subid = -1;
+			}
 		}
 	}
 
@@ -451,8 +464,9 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 	seq_printf(seq, "[vtunerc driver, version " VTUNERC_MODULE_VERSION "]\n");
 	seq_printf(seq, " vtunerc%i used by : %u\n", ctx->idx, ctx->fd_opened);
 	seq_printf(seq, " adapter%i in use  : %s\n", ctx->dvb_adapter.num, (ctx->adapter_inuse == 1) ? "yes" : "no");
+
 	status2str(seq, ctx->status);
-	if (ctx->stat_time>0)
+	if (ctx->stat_time > 0)
 		seq_printf(seq, " last change      : %lli\n", ktime_get_seconds()-ctx->stat_time);
 	if (ctx->fe) {
 		struct fe_params *fep = &ctx->fe_params;
@@ -574,6 +588,11 @@ static int __init vtunerc_init(void)
 			return -ENOMEM;
 		}
 
+		ctx->mem = vmalloc(DVR_BUFFER_SIZE);
+		if (!ctx->mem) return -ENOMEM;
+
+		dvb_ringbuffer_init(&ctx->rbuf, ctx->mem, DVR_BUFFER_SIZE);
+
 		vtunerc_tbl[idx] = ctx;
 
 		ctx->idx = idx;
@@ -582,7 +601,6 @@ static int __init vtunerc_init(void)
 		ctx->ctrldev_response.type = -1;
 		init_waitqueue_head(&ctx->ctrldev_wait_request_wq);
 		init_waitqueue_head(&ctx->ctrldev_wait_response_wq);
-		init_waitqueue_head(&ctx->ctrldev_wait_packet_wq);
 
 		// buffer
 		ctx->kernel_buf = NULL;
@@ -695,6 +713,7 @@ static void __exit vtunerc_exit(void)
 		remove_proc_entry(ctx->procname, NULL);
 		kfree(ctx->procname);
 #endif
+		vfree(ctx->mem);
 
 		vtunerc_frontend_clear(ctx);
 
