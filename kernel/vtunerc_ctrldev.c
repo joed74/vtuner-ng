@@ -78,6 +78,11 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		return -EINVAL;
 	}
 
+	if (!ctx->stat_time) {
+		up(&ctx->tswrite_sem);
+		return len;
+	}
+
 	for (i = 0; i < len; i += 188) {
 		if (ctx->kernel_buf[i] != 0x47) { /* start of TS packet */
 			printk(KERN_ERR "vtunerc%d: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",

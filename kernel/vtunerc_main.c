@@ -65,6 +65,19 @@ int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
 	return i;
 }
 
+bool feedtab_only_secpids(struct vtunerc_ctx *ctx)
+{
+	struct dvb_demux_feed *entry;
+	bool ret = true;
+	mutex_lock(&ctx->demux.mutex);
+
+	list_for_each_entry(entry, &ctx->demux.feed_list, list_head)
+		if (entry->pid > 20) ret = false;
+
+        mutex_unlock(&ctx->demux.mutex);
+        return ret;
+}
+
 void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 {
 	struct vtuner_message msg;
@@ -460,17 +473,17 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
 	struct vtunerc_feedinfo *fi;
 	struct dvb_demux_feed *entry;
+	struct fe_params *fep;
 
 	seq_printf(seq, "[vtunerc driver, version " VTUNERC_MODULE_VERSION "]\n");
 	seq_printf(seq, " vtunerc%i used by : %u\n", ctx->idx, ctx->fd_opened);
 	seq_printf(seq, " adapter%i in use  : %s\n", ctx->dvb_adapter.num, (ctx->adapter_inuse == 1) ? "yes" : "no");
 
-	status2str(seq, ctx->status);
-	if (ctx->stat_time > 0)
+	if (ctx->stat_time > 0 && ctx->fe) {
+		status2str(seq, ctx->status);
 		seq_printf(seq, " last change      : %lli\n", ktime_get_seconds()-ctx->stat_time);
-	if (ctx->fe) {
-		struct fe_params *fep = &ctx->fe_params;
-		if (fep->frequency>0 && fep->delivery_system>0) {
+		fep = &ctx->fe_params;
+		if (fep->frequency > 0 && fep->delivery_system > 0) {
 			delsys2str(seq, fep->delivery_system);
 			if (fep->delivery_system==SYS_DVBS || fep->delivery_system==SYS_DVBS2) {
 				mod2str(seq, fep->u.qpsk.modulation);

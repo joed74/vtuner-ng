@@ -104,6 +104,7 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid);
+bool feedtab_only_secpids(struct vtunerc_ctx *ctx);
 void send_pidlist(struct vtunerc_ctx *ctx, bool retune);
 void dvb_proxyfe_set_signal(struct vtunerc_ctx *ctx);
 void dvb_proxyfe_set_delsys_info(struct dvb_frontend *fe);
