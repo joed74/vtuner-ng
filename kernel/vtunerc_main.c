@@ -164,6 +164,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	feed->pusi_seen = 0;
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "add pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
+	ctx->paused = 0;
 	send_pidlist(ctx, false);
 	return 0;
 }
@@ -479,7 +480,7 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 	seq_printf(seq, " vtunerc%i used by : %u\n", ctx->idx, ctx->fd_opened);
 	seq_printf(seq, " adapter%i in use  : %s\n", ctx->dvb_adapter.num, (ctx->adapter_inuse == 1) ? "yes" : "no");
 
-	if (ctx->stat_time > 0 && ctx->fe) {
+	if (ctx->stat_time > 0 && ctx->fe && !ctx->paused) {
 		status2str(seq, ctx->status);
 		seq_printf(seq, " last change      : %lli\n", ktime_get_seconds()-ctx->stat_time);
 		fep = &ctx->fe_params;

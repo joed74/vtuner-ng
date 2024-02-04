@@ -129,13 +129,17 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 
 	memset(&msg, 0, sizeof(msg));
 
-	if (feedtab_only_secpids(ctx) && ctx->stat_time > 0 && (ktime_get_seconds()-ctx->stat_time) > 60) {
+	if (feedtab_only_secpids(ctx) && !re_tune && ctx->stat_time > 0 && (ktime_get_seconds()-ctx->stat_time) > 60) {
 		dprintk(ctx, "MSG_CLOSE_FRONTEND\n");
 		ctx->stat_time = 0;
+		ctx->paused = 1;
+		ctx->fe_params.delivery_system = 0;
 		msg.type = MSG_CLOSE_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 		return 0;
 	}
+
+	if (ctx->paused) return 0;
 
 	msg.body.fe_params.delivery_system = c->delivery_system;
 	msg.body.fe_params.frequency = c->frequency;

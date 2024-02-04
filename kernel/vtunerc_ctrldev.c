@@ -78,7 +78,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		return -EINVAL;
 	}
 
-	if (!ctx->stat_time) {
+	if (ctx->paused) {
 		up(&ctx->tswrite_sem);
 		return len;
 	}

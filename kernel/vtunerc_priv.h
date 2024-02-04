@@ -67,6 +67,7 @@ struct vtunerc_ctx {
 	struct fe_params fe_params;
 	struct vtunerc_feedinfo feedinfo[MAX_PIDTAB_LEN];
 
+	int paused;
 	u8 status;
 
 	struct semaphore xchange_sem;
