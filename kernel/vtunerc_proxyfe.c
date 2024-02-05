@@ -139,7 +139,11 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 		return 0;
 	}
 
-	if (ctx->paused) return 0;
+	if (re_tune) {
+                ctx->paused = 0;
+	} else {
+		if (ctx->paused) return 0;
+	}
 
 	msg.body.fe_params.delivery_system = c->delivery_system;
 	msg.body.fe_params.frequency = c->frequency;
