@@ -37,7 +37,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct dvb_demux *demux = &ctx->demux;
 	struct dmx_section_feed *sec;
 	unsigned short pid;
-	int tailsize, i, cc, idx, offs, pf, pesh;
+	int tailsize, i, cc, cc_, idx, offs, pf, pesh;
 	bool sendfiller, pusi;
 	struct vtunerc_feedinfo *fi;
 
@@ -107,6 +107,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			idx = feedtab_find_pid(ctx, pid);
 			if (idx > -1) {
 				fi = (struct vtunerc_feedinfo *) &ctx->feedinfo[idx];
+				if (ctx->demux.feed[idx].pusi_seen) sendfiller = 0; // pusi already seen
 				pusi = (ctx->kernel_buf[i+1] & 0x40);
 				if (pusi) {
 					offs = 4;
@@ -120,9 +121,9 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 
 				if (ctx->demux.feed[idx].type == DMX_TYPE_TS)
 				{
-					sendfiller = 0;
 					if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
 						dprintk(ctx,"found pusi for pid %it\n", pid);
+						sendfiller = 0;
 						// PES
 						if (offs>0 && offs<182 && (ctx->kernel_buf[i+offs]==0) && (ctx->kernel_buf[i+offs+1]==0) && (ctx->kernel_buf[i+offs+2]==1)) {
 							fi->id = ctx->kernel_buf[i+offs+3];
@@ -140,10 +141,15 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 				{
 					if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
 						dprintk(ctx,"found pusi for pid %is\n", pid);
+						sendfiller = 0;
 						// now start section feed
 						sec = &ctx->demux.feed[idx].feed.sec;
+						sec->secbufp = sec->seclen = sec->tsfeedp = 0;
 						sec->is_filtering = 1;
 						ctx->demux.feed[idx].state = DMX_STATE_GO;
+						cc_ = cc - 1;
+						if (cc_ == -1) cc_ = 15;
+						ctx->demux.feed[idx].cc = cc_;
 						// PSI
 						pf = ctx->kernel_buf[i+offs];
 						if (offs+1+pf<188)
