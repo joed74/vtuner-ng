@@ -72,7 +72,7 @@ bool feedtab_only_secpids(struct vtunerc_ctx *ctx)
 	mutex_lock(&ctx->demux.mutex);
 
 	list_for_each_entry(entry, &ctx->demux.feed_list, list_head)
-		if (entry->pid > 20) ret = false;
+		if (entry->type != DMX_TYPE_SEC) ret = false;
 
         mutex_unlock(&ctx->demux.mutex);
         return ret;
