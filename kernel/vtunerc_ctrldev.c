@@ -37,7 +37,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	struct dvb_demux *demux = &ctx->demux;
 	struct dmx_section_feed *sec;
 	unsigned short pid;
-	int tailsize, i, cc, cc_, idx, offs, pf, pesh;
+	int tailsize, i, cc, cc_, idx, offs, pf, pesh, tune_id;
 	bool sendfiller, pusi;
 	struct vtunerc_feedinfo *fi;
 
@@ -84,6 +84,8 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	}
 
 	for (i = 0; i < len; i += 188) {
+		tune_id = (ctx->kernel_buf[i] & 0x38) >> 3;
+		ctx->kernel_buf[i] &= 0xC7; // clear out optional tune_id
 		if (ctx->kernel_buf[i] != 0x47) { /* start of TS packet */
 			printk(KERN_ERR "vtunerc%d: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",
 					ctx->idx, i / 188, ctx->kernel_buf[i], ctx->kernel_buf[i + 1],
@@ -100,60 +102,62 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 		} else {
 			cc = ctx->kernel_buf[i+3] & 0x0f;
 			sendfiller = 1;
-			if (!(ctx->status & FE_HAS_LOCK)) {
-				dprintk(ctx, "set signal LOCK\n");
-				ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // TS packets -> we habe a lock!
-			}
-			idx = feedtab_find_pid(ctx, pid);
-			if (idx > -1) {
-				fi = (struct vtunerc_feedinfo *) &ctx->feedinfo[idx];
-				if (ctx->demux.feed[idx].pusi_seen) sendfiller = 0; // pusi already seen
-				pusi = (ctx->kernel_buf[i+1] & 0x40);
-				if (pusi) {
-					offs = 4;
-					if ((ctx->kernel_buf[i+3] & 0x30)==0x30) offs+=ctx->kernel_buf[i+4]+1;
+			if (!tune_id || tune_id==ctx->tune_id) {
+				if (!(ctx->status & FE_HAS_LOCK)) {
+					dprintk(ctx, "set signal LOCK id=%i\n", tune_id);
+					ctx->status = FE_HAS_SIGNAL | FE_HAS_CARRIER | FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK; // TS packets -> we habe a lock!
 				}
+				idx = feedtab_find_pid(ctx, pid);
+				if (idx > -1) {
+					fi = (struct vtunerc_feedinfo *) &ctx->feedinfo[idx];
+					if (ctx->demux.feed[idx].pusi_seen) sendfiller = 0; // pusi already seen
+					pusi = (ctx->kernel_buf[i+1] & 0x40);
+					if (pusi) {
+						offs = 4;
+						if ((ctx->kernel_buf[i+3] & 0x30)==0x30) offs+=ctx->kernel_buf[i+4]+1;
+					}
 
-				if (((ctx->kernel_buf[i+3] & 0x20)==0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
-					fi->id = -2;
-					sendfiller = 0; // packet is already a filler
-				}
+					if (((ctx->kernel_buf[i+3] & 0x20)==0x20) && (ctx->kernel_buf[i+4]==0xB7) && (fi->id == -1)) {
+						fi->id = -2;
+						sendfiller = 0; // packet is already a filler
+					}
 
-				if (ctx->demux.feed[idx].type == DMX_TYPE_TS)
-				{
-					if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
-						dprintk(ctx,"found pusi for pid %it\n", pid);
-						sendfiller = 0;
-						// PES
-						if (offs>0 && offs<182 && (ctx->kernel_buf[i+offs]==0) && (ctx->kernel_buf[i+offs+1]==0) && (ctx->kernel_buf[i+offs+2]==1)) {
-							fi->id = ctx->kernel_buf[i+offs+3];
-							if (fi->id == 0xbd) {
-								pesh=0;
-								if ((ctx->kernel_buf[i+offs+6] & 0xC0)==0x80) pesh = ctx->kernel_buf[i+offs+8]+3;
-								if (ctx->kernel_buf[i+offs+pesh+6]==0x0B && ctx->kernel_buf[i+offs+pesh+7]==0x77) fi->subid=0x6a;
-								if (ctx->kernel_buf[i+offs+pesh+6]==0x20) fi->subid=0x59;
+					if (ctx->demux.feed[idx].type == DMX_TYPE_TS)
+					{
+						if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
+							dprintk(ctx,"found pusi for pid %it\n", pid);
+							sendfiller = 0;
+							// PES
+							if (offs>0 && offs<182 && (ctx->kernel_buf[i+offs]==0) && (ctx->kernel_buf[i+offs+1]==0) && (ctx->kernel_buf[i+offs+2]==1)) {
+								fi->id = ctx->kernel_buf[i+offs+3];
+								if (fi->id == 0xbd) {
+									pesh=0;
+									if ((ctx->kernel_buf[i+offs+6] & 0xC0)==0x80) pesh = ctx->kernel_buf[i+offs+8]+3;
+									if (ctx->kernel_buf[i+offs+pesh+6]==0x0B && ctx->kernel_buf[i+offs+pesh+7]==0x77) fi->subid=0x6a;
+									if (ctx->kernel_buf[i+offs+pesh+6]==0x20) fi->subid=0x59;
+								}
 							}
 						}
 					}
-				}
 
-				if (ctx->demux.feed[idx].type == DMX_TYPE_SEC)
-				{
-					if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
-						dprintk(ctx,"found pusi for pid %is\n", pid);
-						sendfiller = 0;
-						// now start section feed
-						sec = &ctx->demux.feed[idx].feed.sec;
-						sec->secbufp = sec->seclen = sec->tsfeedp = 0;
-						sec->is_filtering = 1;
-						ctx->demux.feed[idx].state = DMX_STATE_GO;
-						cc_ = cc - 1;
-						if (cc_ == -1) cc_ = 15;
-						ctx->demux.feed[idx].cc = cc_;
-						// PSI
-						pf = ctx->kernel_buf[i+offs];
-						if (offs+1+pf<188)
-							fi->id = ctx->kernel_buf[i+offs+1+pf];
+					if (ctx->demux.feed[idx].type == DMX_TYPE_SEC)
+					{
+						if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
+							dprintk(ctx,"found pusi for pid %is (cc=%i)\n", pid, cc);
+							sendfiller = 0;
+							// now start section feed
+							sec = &ctx->demux.feed[idx].feed.sec;
+							sec->is_filtering = 1;
+							ctx->demux.feed[idx].state = DMX_STATE_GO;
+							cc_ = cc - 1;
+							if (cc_ == -1) cc_ = 15;
+							ctx->demux.feed[idx].cc = cc_;
+							ctx->demux.feed[idx].pusi_seen = 1;
+							// PSI
+							pf = ctx->kernel_buf[i+offs];
+							if (offs+1+pf<188)
+								fi->id = ctx->kernel_buf[i+offs+1+pf];
+						}
 					}
 				}
 			}
@@ -169,7 +173,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			}
 		}
 		dvb_dmx_swfilter_packets(demux, &ctx->kernel_buf[i], 1);
-		if (idx > -1 && pusi) ctx->demux.feed[idx].pusi_seen=1;
+		if (idx > -1 && pusi && ctx->demux.feed[idx].type == DMX_TYPE_TS) ctx->demux.feed[idx].pusi_seen=1;
 	}
 
 	if (waitqueue_active(&ctx->rbuf.queue)) {

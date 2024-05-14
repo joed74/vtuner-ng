@@ -41,7 +41,7 @@
 struct vtunerc_config {
 
 	int debug;
-	int tscheck;
+	int timeout;
 	int devices;
 };
 
@@ -69,6 +69,8 @@ struct vtunerc_ctx {
 
 	int paused;
 	u8 status;
+
+	u8 tune_id;
 
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;

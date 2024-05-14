@@ -5,7 +5,7 @@ OBJ = satip_rtp.o satip_vtuner.o satip_config.o \
 BIN = satip
 
 $(BIN):  $(OBJ)
-	$(CC) -o $(BIN) $(OBJ) -lrt -lpthread 
+	$(CC) -o $(BIN) $(OBJ) -lrt -lpthread -lcap
 
 install:
 	make $(BIN)

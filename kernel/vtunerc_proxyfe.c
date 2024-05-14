@@ -123,13 +123,16 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
 	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
+	int timeout;
 
 	if (ctx->fd_opened < 1) return -EAGAIN;
 	if (c->frequency == 0) return -EINVAL;
 
 	memset(&msg, 0, sizeof(msg));
 
-	if (feedtab_only_secpids(ctx) && !re_tune && ctx->stat_time > 0 && (ktime_get_seconds()-ctx->stat_time) > 60) {
+	timeout = ctx->config ? ctx->config->timeout : 180;
+	if (timeout<30) timeout=30;
+	if (feedtab_only_secpids(ctx) && !re_tune && ctx->stat_time > 0 && (ktime_get_seconds()-ctx->stat_time) > timeout) {
 		dprintk(ctx, "MSG_CLOSE_FRONTEND\n");
 		ctx->stat_time = 0;
 		ctx->paused = 1;
@@ -140,62 +143,67 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 	}
 
 	if (re_tune) {
+		if (ctx->paused) dprintk(ctx, "retune after pause\n");
                 ctx->paused = 0;
 	} else {
 		if (ctx->paused) return 0;
 	}
 
-	msg.body.fe_params.delivery_system = c->delivery_system;
-	msg.body.fe_params.frequency = c->frequency;
+	msg.body.fe_tune.fe_params.delivery_system = c->delivery_system;
+	msg.body.fe_tune.fe_params.frequency = c->frequency;
 
 	switch (c->delivery_system) {
 	case SYS_DVBS:
 	case SYS_DVBS2:
-		msg.body.fe_params.u.qpsk.symbol_rate = c->symbol_rate;
-		msg.body.fe_params.u.qpsk.fec_inner = c->fec_inner;
-		msg.body.fe_params.u.qpsk.modulation = c->modulation;
-		msg.body.fe_params.u.qpsk.pilot = c->pilot;
-		msg.body.fe_params.u.qpsk.rolloff = c->rolloff;
-		memcpy(&msg.body.fe_params.u.qpsk.sat, &ctx->fe_params.u.qpsk.sat, sizeof(struct sat_params));
+		msg.body.fe_tune.fe_params.u.qpsk.symbol_rate = c->symbol_rate;
+		msg.body.fe_tune.fe_params.u.qpsk.fec_inner = c->fec_inner;
+		msg.body.fe_tune.fe_params.u.qpsk.modulation = c->modulation;
+		msg.body.fe_tune.fe_params.u.qpsk.pilot = c->pilot;
+		msg.body.fe_tune.fe_params.u.qpsk.rolloff = c->rolloff;
+		memcpy(&msg.body.fe_tune.fe_params.u.qpsk.sat, &ctx->fe_params.u.qpsk.sat, sizeof(struct sat_params));
 		break;
 	case SYS_DVBT:
 	case SYS_DVBT2:
-		msg.body.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
-		msg.body.fe_params.u.ofdm.code_rate_HP = c->code_rate_HP;
-		msg.body.fe_params.u.ofdm.code_rate_LP = c->code_rate_LP;
-		msg.body.fe_params.u.ofdm.constellation = c->modulation;
-		msg.body.fe_params.u.ofdm.transmission_mode = c->transmission_mode;
-		msg.body.fe_params.u.ofdm.guard_interval = c->guard_interval;
-		msg.body.fe_params.u.ofdm.hierarchy_information = c->hierarchy;
+		msg.body.fe_tune.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
+		msg.body.fe_tune.fe_params.u.ofdm.code_rate_HP = c->code_rate_HP;
+		msg.body.fe_tune.fe_params.u.ofdm.code_rate_LP = c->code_rate_LP;
+		msg.body.fe_tune.fe_params.u.ofdm.constellation = c->modulation;
+		msg.body.fe_tune.fe_params.u.ofdm.transmission_mode = c->transmission_mode;
+		msg.body.fe_tune.fe_params.u.ofdm.guard_interval = c->guard_interval;
+		msg.body.fe_tune.fe_params.u.ofdm.hierarchy_information = c->hierarchy;
 		break;
 	case SYS_DVBC_ANNEX_A:
 	case SYS_DVBC_ANNEX_B:
 	case SYS_DVBC_ANNEX_C:
-		msg.body.fe_params.u.qam.inversion = c->inversion;
-		msg.body.fe_params.u.qam.symbol_rate = c->symbol_rate;
-		msg.body.fe_params.u.qam.modulation = c->modulation;
+		msg.body.fe_tune.fe_params.u.qam.inversion = c->inversion;
+		msg.body.fe_tune.fe_params.u.qam.symbol_rate = c->symbol_rate;
+		msg.body.fe_tune.fe_params.u.qam.modulation = c->modulation;
 		break;
 	default:
 		printk(KERN_ERR "vtunerc%d: unregognized tuner type = %d\n", ctx->idx, c->delivery_system);
 		return -EINVAL;
 	}
 
-	if (memcmp(&msg.body.fe_params, &ctx->fe_params, sizeof(struct fe_params))!=0) {
+	if (memcmp(&msg.body.fe_tune.fe_params, &ctx->fe_params, sizeof(struct fe_params))!=0) {
+
+		ctx->tune_id++;
+		if (ctx->tune_id>7) ctx->tune_id=1;
 
 		ctx->stat_time = ktime_get_seconds();
 		ctx->status = FE_NONE;
 		*status = FE_NONE;
 
-		dprintk(ctx, "MSG_SET_FRONTEND, set signal NONE");
+		dprintk(ctx, "MSG_SET_FRONTEND, id=%i set signal NONE", ctx->tune_id);
 		if (c->delivery_system == SYS_DVBS || c->delivery_system == SYS_DVBS2) {
-			if (msg.body.fe_params.u.qpsk.sat.burst_cmd.valid) dprintk_cont(ctx, ", with BURST");
-			if (msg.body.fe_params.u.qpsk.sat.diseqc_master_cmd.msg_len>0) dprintk_cont(ctx, ", with DISEQC");
+			if (msg.body.fe_tune.fe_params.u.qpsk.sat.burst_cmd.valid) dprintk_cont(ctx, ", with BURST");
+			if (msg.body.fe_tune.fe_params.u.qpsk.sat.diseqc_master_cmd.msg_len>0) dprintk_cont(ctx, ", with DISEQC");
 		}
 		dprintk_cont(ctx,"\n");
 
 		msg.type = MSG_SET_FRONTEND;
+		msg.body.fe_tune.tune_id = ctx->tune_id;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
-		memcpy(&ctx->fe_params, &msg.body.fe_params, sizeof(struct fe_params));
+		memcpy(&ctx->fe_params, &msg.body.fe_tune.fe_params, sizeof(struct fe_params));
 
 		send_pidlist(ctx, true);
 	}

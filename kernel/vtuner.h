@@ -29,6 +29,7 @@
 
 #define PID_UNKNOWN 0xffff
 
+#ifndef __KERNEL__
 #ifndef u64
 typedef unsigned long long u64;
 #endif
@@ -51,6 +52,7 @@ typedef unsigned short u16;
 
 #ifndef u8
 typedef unsigned char u8;
+#endif
 #endif
 
 struct diseqc_master_cmd {
@@ -102,10 +104,15 @@ struct fe_params {
 	} u;
 } __attribute__ ((packed));
 
+struct fe_tune {
+	u8    tune_id;
+	struct fe_params fe_params;
+} __attribute__ ((packed));
+
 struct vtuner_message {
 	s32 type;
 	union {
-		struct fe_params fe_params;
+		struct fe_tune fe_tune;
 		u16 pidlist[MAX_PIDTAB_LEN];
 	} body;
 } __attribute__ ((packed));

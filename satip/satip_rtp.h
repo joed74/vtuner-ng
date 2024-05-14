@@ -21,9 +21,25 @@
 #define _SATIP_RTP_H
 
 
-struct satip_rtp;
+typedef struct satip_rtp_last
+{
+  int signallevel;
+  int quality;
+} t_satip_rtp_last;
+
+typedef struct satip_rtp
+{
+  int fd;
+  int rtp_port;
+  int rtp_socket;
+  int rtcp_port;
+  int rtcp_socket;
+  unsigned char tune_id;
+  t_satip_rtp_last last;
+  pthread_t thread;
+} t_satip_rtp;
 
 struct satip_rtp*  satip_rtp_new(int fd, int fixed_rtp_port);
-int satip_rtp_port(struct satip_rtp* srtp);
+//int satip_rtp_port(struct satip_rtp* srtp);
 
 #endif

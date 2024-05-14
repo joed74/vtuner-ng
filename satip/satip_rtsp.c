@@ -31,6 +31,7 @@
 #include <poll.h>
 
 #include "satip_config.h"
+#include "satip_rtp.h"
 #include "satip_rtsp.h"
 #include "polltimer.h"
 #include "log.h"
@@ -65,10 +66,10 @@ typedef struct satip_rtsp {
   int sockfd;
   char* host;
   char* port;
-  int rtp_port;
   struct addrinfo* addrinfo;
 
   t_satip_config* satip_config;
+  t_satip_rtp *satip_rtp;
 
   struct polltimer** timer_queue;
   struct polltimer* timer;
@@ -160,21 +161,22 @@ t_satip_rtsp* satip_rtsp_new(t_satip_config* satip_config,
 			     struct polltimer** timer_queue,
 			     const char* host, 
 			     const char* port,
-			     int rtp_port)
+			     t_satip_rtp* satip_rtp)
 {
   t_satip_rtsp* rtsp; 
-  
+
   rtsp=(t_satip_rtsp*)malloc(sizeof(t_satip_rtsp));
 
   rtsp->host=strdup(host);
   rtsp->port=strdup(port);
-  rtsp->rtp_port=rtp_port;
  
   rtsp->satip_config= satip_config;
   rtsp->timer_queue = timer_queue;
 
   rtsp->timer = NULL;
   rtsp->sockfd = -1;
+
+  rtsp->satip_rtp = satip_rtp;
 
   /* reset dynamic parts*/
   reset_connection(rtsp);
@@ -231,7 +233,7 @@ static int read_response(t_satip_rtsp* rtsp)
       sscanf(rtsp->rxbuf,"RTSP/%*s %d",&ret);
       if (ret!=200)
 	return SATIP_RTSP_ERROR;
-      
+     fflush(stdout);
       /* request specific evaluation of response */
       return (*handle_response[rtsp->request])(rtsp);
     }
@@ -270,14 +272,15 @@ static int handle_response_setup(t_satip_rtsp* rtsp)
     }
 
   DEBUG(MSG_NET,"Session: %s\n",rtsp->session);
-  
+
+  rtsp->satip_rtp->tune_id=rtsp->satip_config->tune_id;
   return SATIP_RTSP_COMPLETE;
 }
 
 
 static int handle_response_play(t_satip_rtsp* rtsp)
 {
-  UNUSED(rtsp);
+  rtsp->satip_rtp->tune_id=rtsp->satip_config->tune_id;
   return SATIP_RTSP_COMPLETE;
 }
 
@@ -377,13 +380,13 @@ static int send_setup(t_satip_rtsp* rtsp)
   printed += snprintf(buf+printed,remain-printed," RTSP/1.0\r\n"
 		      "CSeq: %d\r\n"
 		      "Transport: RTP/AVP;unicast;client_port=%d-%d\r\n\r\n",
-		      rtsp->cseq++,rtsp->rtp_port,rtsp->rtp_port+1);
+		      rtsp->cseq++,rtsp->satip_rtp->rtp_port,rtsp->satip_rtp->rtp_port+1);
 
 #else
   printed += snprintf(buf+printed,remain-printed," RTSP/1.0\r\n"
 		      "CSeq: %d\r\n"
 		      "Transport: RTP/AVP;multicast;destination=224.16.16.1;port=%d-%d\r\n\r\n",
-		      rtsp->cseq++,rtsp->rtp_port,rtsp->rtp_port+1);
+		      rtsp->cseq++,rtsp->satip_rtp->rtp_port,rtsp->satip_rtp->rtp_port+1);
 #endif
 
 

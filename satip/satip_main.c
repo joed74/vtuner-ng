@@ -19,6 +19,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
 #include <poll.h>
@@ -26,6 +28,10 @@
 #include <sys/mman.h>
 #include <sched.h>
 #include <signal.h>
+#include <pwd.h>
+#include <sys/prctl.h>
+#include <grp.h>
+#include <sys/capability.h>
 
 #include "satip_config.h"
 #include "satip_vtuner.h"
@@ -86,6 +92,52 @@ static void test_sequencer_loop(void* param)
     }
 }
 
+
+static void set_user(char *suser)
+{
+  char *e = suser;
+  uid_t uid = (uid_t)strtol(suser, &e, 10);
+  struct passwd *user = (e > suser && *e == '\0') ? getpwuid(uid) : getpwnam(suser);
+  if (!user) {
+    ERROR(MSG_MAIN, "unknown user: '%s'\n", suser);
+    return;
+    }
+  if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0) != 0) {
+    ERROR(MSG_MAIN, "cannot set keeping capabilities during setuid: %s\n", strerror(errno));
+    return;
+    }
+  if (setgid(user->pw_gid) < 0) {
+    ERROR(MSG_MAIN, "cannot set group id %u: %s\n", (unsigned int)user->pw_gid, strerror(errno));
+    return;
+    }
+  if (initgroups(user->pw_name, user->pw_gid) < 0) {
+    ERROR(MSG_MAIN, "cannot set supplemental group ids for user %s: %s\n", user->pw_name, strerror(errno));
+    return;
+    }
+  if (setuid(user->pw_uid) < 0) {
+    ERROR(MSG_MAIN, "cannot set user id %u: %s\n", (unsigned int)user->pw_uid, strerror(errno));
+    return;
+    }
+  if (prctl(PR_SET_KEEPCAPS, 0, 0, 0, 0) != 0) {
+    ERROR(MSG_MAIN, "cannot reset keeping capabilities during setuid: %s\n", strerror(errno));
+    return;
+    }
+  // drop all capabilities except selected ones
+  cap_t caps = cap_from_text("= cap_sys_nice,cap_ipc_lock=ep");
+  if (!caps) {
+    ERROR(MSG_MAIN, "cap_from_text failed: %s\n", strerror(errno));
+    return;
+    }
+  if (cap_set_proc(caps) == -1) {
+    ERROR(MSG_MAIN, "cap_set_proc failed: %s\n", strerror(errno));
+    cap_free(caps);
+    return;
+    }
+  cap_free(caps);
+  DEBUG(MSG_MAIN,"running as user: %u\n", (unsigned int)user->pw_uid);
+}
+
+
 static void enable_rt_scheduling()
 {
   struct sched_param schedp;
@@ -114,7 +166,7 @@ void hangup(int sig)
 void usage(char *name)
 {
   fprintf(stderr,
-     "usage: %s -s satip_receiver [-p 554] [-d /dev/vtunercX] [-D delsys[,delsys]] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port]\n"
+     "usage: %s -s satip_receiver [-p 554] [-d /dev/vtunercX] [-D delsys[,delsys]] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port] [-u user]\n"
      "  -s\tip or hostname of satip receiver\n"
      "  -p\tport of satip receiver (defaults to 554)\n"
      "  -d\tvtuner device (defaults to /dev/vtunerc0)\n"
@@ -124,6 +176,7 @@ void usage(char *name)
      "  -m\tmask for logs: 1 = main, 2 = net, 4 = data, 7 = all (defaults to main + net)\n"
      "  -r\tfixed rtp port (e.g. 45200)\n"
      "  -T\ttest mode without vtuner, ts packets gets written to stdout!!\n"
+     "  -u\trun as user\n"
      ,name
      );
 }
@@ -134,6 +187,7 @@ int main(int argc, char** argv)
   char* port = "554";
   char* device = "/dev/vtunerc0";
   char* delsys = NULL;
+  char* user = NULL;
   int frontend = -1;
   int fixed_rtp_port = -1;
 
@@ -152,7 +206,7 @@ int main(int argc, char** argv)
   signal(SIGINT, hangup);
   signal(SIGTERM, hangup);
 
-  while((opt = getopt(argc, argv, "s:Tp:d:D:f:m:l:r:h::")) != -1 ) {
+  while((opt = getopt(argc, argv, "s:Tp:d:D:f:m:l:r:u:h::")) != -1 ) {
     switch(opt) 
       {
       case 'h': 
@@ -195,6 +249,10 @@ int main(int argc, char** argv)
 	test_sequencer = 1;
         break;
 
+      case 'u': 
+	user = optarg;
+	break;
+
       default:
 	exit(1);	
       }
@@ -205,6 +263,8 @@ int main(int argc, char** argv)
     exit(1);
   }
         
+  if ( user!=NULL )
+    set_user(user);
 
   enable_rt_scheduling();
 
@@ -244,9 +304,7 @@ int main(int argc, char** argv)
     poll_idx=1;
   }
 
-  srtsp = satip_rtsp_new(satconf,&timerq, host, port,
-			 satip_rtp_port(srtp));
-    
+  srtsp = satip_rtsp_new(satconf,&timerq, host, port, srtp);
 
   while (1)
     {

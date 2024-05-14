@@ -35,24 +35,6 @@
 
 #include "vtuner.h"
 
-typedef struct satip_rtp_last
-{
-  int signallevel;
-  int quality;
-} t_satip_rtp_last;
-
-typedef struct satip_rtp
-{
-  int fd;
-  int rtp_port;
-  int rtp_socket;
-  int rtcp_port;
-  int rtcp_socket;
-  t_satip_rtp_last last;
-  pthread_t thread;
-} t_satip_rtp;
-
-
 static void set_signal(int fd, int level, int quality)
 {
 	struct vtuner_signal sig;
@@ -74,7 +56,7 @@ static void set_signal(int fd, int level, int quality)
 	// missing conversion from 15 to 0 into decibel values...
 	sig.cnr.stat[0].scale = VT_SCALE_RELATIVE; // 0-100% as 0-65535
 	sig.cnr.stat[0].u.uvalue = quality * 65535 / 15; 
-	
+
 	ioctl(fd, VTUNER_SET_SIGNAL, &sig);
 }
 
@@ -198,7 +180,16 @@ static void* rtp_receiver(void* param)
 	  DEBUG(MSG_DATA,"RTP: rd %d   wr %d\n",rx,wr);
 	  if ( rx>12 && rxbuf[12] == 0x47 )
 	    {
-      		wr = write(srtp->fd,&rxbuf[12],rx-12);
+		int len = rx-12;
+		int tailsize = len % 188;
+		len -= tailsize;
+		unsigned char *buf=&rxbuf[12];
+		for (int i=0; i < len; i+= 188) {
+                   if (srtp->tune_id) {
+		      buf[i]=0x47 | (srtp->tune_id << 3);
+		   }
+		   wr = write(srtp->fd,&buf[i],188);
+		}
 		DEBUG(MSG_DATA,"RTP: rd %d  wr %d\n",rx,wr);
 	    }
 	    else
@@ -319,8 +310,3 @@ t_satip_rtp*  satip_rtp_new(int fd, int fixed_rtp_port)
   return srtp;
 }
 
-
-int satip_rtp_port(t_satip_rtp* srtp)
-{
-  return srtp->rtp_port;
-}

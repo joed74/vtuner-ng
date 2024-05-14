@@ -108,7 +108,11 @@ typedef struct satip_config
   unsigned short    mod_pid[SATIPCFG_MAX_PIDS];
 
   /* sat number as position  */
-  int position;
+  int               position;
+
+  /* tune id */
+  unsigned char     tune_id;
+
 } t_satip_config;
 
 

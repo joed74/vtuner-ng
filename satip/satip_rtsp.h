@@ -21,6 +21,7 @@
 #define _SATIP_RTSP_H
 
 #include "polltimer.h"
+#include "satip_rtp.h"
 #include "satip_config.h"
 
 
@@ -34,7 +35,7 @@ struct satip_rtsp* satip_rtsp_new(t_satip_config* satip_config,
 				  struct polltimer** timer_queue,
 				  const char* host, 
 				  const char* port,
-				  int rtp_port );
+				  t_satip_rtp *satip_rtp );
 
 int   satip_rtsp_socket(struct satip_rtsp* rtsp);
 void  satip_rtsp_pollevents(struct satip_rtsp* rtsp, short events);

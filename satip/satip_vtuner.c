@@ -34,16 +34,8 @@
 #include "satip_vtuner.h"
 #include "log.h"
 
-/* fixme: align with driver */
-typedef unsigned int   u32;
-typedef signed int     s32;
-typedef unsigned short u16;
-typedef unsigned char  u8;
-
 /* driver interface */
 #include "vtuner.h"
-
-
 
 extern char* const strmap_fecinner[];
 extern char* const strmap_rolloff[];
@@ -107,7 +99,7 @@ int satip_vtuner_fd(struct satip_vtuner* vt)
 static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
   char dbg[50];
-  struct diseqc_master_cmd* cmd=&msg->body.fe_params.u.qpsk.sat.diseqc_master_cmd;
+  struct diseqc_master_cmd* cmd=&msg->body.fe_tune.fe_params.u.qpsk.sat.diseqc_master_cmd;
   t_polarization ret = SATIPCFG_UNSET;
 
   if ( cmd->msg[0] == 0xe0 &&
@@ -130,11 +122,11 @@ static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_me
 
       if ( (data & 0x01) == 0x01 )
 	{
-	  msg->body.fe_params.u.qpsk.sat.tone = SEC_TONE_ON; /* high band */
+	  msg->body.fe_tune.fe_params.u.qpsk.sat.tone = SEC_TONE_ON; /* high band */
 	}
       else if ( (data & 0x11) == 0x10 )
 	{
-	  msg->body.fe_params.u.qpsk.sat.tone = SEC_TONE_OFF; /* low band */
+	  msg->body.fe_tune.fe_params.u.qpsk.sat.tone = SEC_TONE_OFF; /* low band */
 	}
 
       if ( (data & 0x02) == 0x02 )
@@ -147,17 +139,17 @@ static t_polarization get_polarization(struct satip_vtuner* vt, struct vtuner_me
     }
   else
     {
-      if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_13)
+      if (msg->body.fe_tune.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_13)
 	ret = SATIPCFG_P_VERTICAL;
-      else if (msg->body.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_18)
+      else if (msg->body.fe_tune.fe_params.u.qpsk.sat.voltage == SEC_VOLTAGE_18)
 	ret = SATIPCFG_P_HORIZONTAL;
     }
-  if (msg->body.fe_params.u.qpsk.sat.burst_cmd.valid) {
-     if (msg->body.fe_params.u.qpsk.sat.burst_cmd.value == SEC_MINI_A) {
+  if (msg->body.fe_tune.fe_params.u.qpsk.sat.burst_cmd.valid) {
+     if (msg->body.fe_tune.fe_params.u.qpsk.sat.burst_cmd.value == SEC_MINI_A) {
         DEBUG(MSG_NET,"BURST SEC_MINI_A\n");
         satip_set_position(vt->satip_cfg,1);
      }
-     if (msg->body.fe_params.u.qpsk.sat.burst_cmd.value == SEC_MINI_B) {
+     if (msg->body.fe_tune.fe_params.u.qpsk.sat.burst_cmd.value == SEC_MINI_B) {
         DEBUG(MSG_NET,"BURST SEC_MINI_B\n");
         satip_set_position(vt->satip_cfg,2);
      }
@@ -180,43 +172,46 @@ unsigned int get_sat_frequency(unsigned int freq, unsigned char tone)
 
 static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 {
+  DEBUG(MSG_NET, "MSG_SET_FRONTEND\n");
   t_polarization pol;
   unsigned int freq;
-  switch (msg->body.fe_params.delivery_system)
+  switch (msg->body.fe_tune.fe_params.delivery_system)
   {
      case SYS_DVBS:
        pol = get_polarization(vt, msg);
-       freq = get_sat_frequency(msg->body.fe_params.frequency, msg->body.fe_params.u.qpsk.sat.tone);
+       freq = get_sat_frequency(msg->body.fe_tune.fe_params.frequency, msg->body.fe_tune.fe_params.u.qpsk.sat.tone);
        satip_set_dvbs(vt->satip_cfg, freq / 10, pol,
-		       msg->body.fe_params.u.qpsk.modulation,
-		       msg->body.fe_params.u.qpsk.symbol_rate / 1000,
-		       msg->body.fe_params.u.qpsk.fec_inner);
+		       msg->body.fe_tune.fe_params.u.qpsk.modulation,
+		       msg->body.fe_tune.fe_params.u.qpsk.symbol_rate / 1000,
+		       msg->body.fe_tune.fe_params.u.qpsk.fec_inner);
        break;
      case SYS_DVBS2:
        pol = get_polarization(vt, msg);
-       freq = get_sat_frequency(msg->body.fe_params.frequency, msg->body.fe_params.u.qpsk.sat.tone);
+       freq = get_sat_frequency(msg->body.fe_tune.fe_params.frequency, msg->body.fe_tune.fe_params.u.qpsk.sat.tone);
        satip_set_dvbs2(vt->satip_cfg, freq / 10, pol,
-		       msg->body.fe_params.u.qpsk.modulation,
-		       msg->body.fe_params.u.qpsk.symbol_rate / 1000,
-		       msg->body.fe_params.u.qpsk.fec_inner,
-		       msg->body.fe_params.u.qpsk.rolloff,
-		       msg->body.fe_params.u.qpsk.pilot);
+		       msg->body.fe_tune.fe_params.u.qpsk.modulation,
+		       msg->body.fe_tune.fe_params.u.qpsk.symbol_rate / 1000,
+		       msg->body.fe_tune.fe_params.u.qpsk.fec_inner,
+		       msg->body.fe_tune.fe_params.u.qpsk.rolloff,
+		       msg->body.fe_tune.fe_params.u.qpsk.pilot);
        break;
      case SYS_DVBC_ANNEX_A:
      case SYS_DVBC_ANNEX_B:
-       satip_set_dvbc(vt->satip_cfg, msg->body.fe_params.frequency / 1000000,
-		       msg->body.fe_params.u.qam.inversion,
-		       msg->body.fe_params.u.qam.modulation,
-		       msg->body.fe_params.u.qam.symbol_rate / 1000);
+       satip_set_dvbc(vt->satip_cfg, msg->body.fe_tune.fe_params.frequency / 1000000,
+		       msg->body.fe_tune.fe_params.u.qam.inversion,
+		       msg->body.fe_tune.fe_params.u.qam.modulation,
+		       msg->body.fe_tune.fe_params.u.qam.symbol_rate / 1000);
        break;
      default:
-       ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_params.delivery_system);
+       ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_tune.fe_params.delivery_system);
        break;
   }
+  vt->satip_cfg->tune_id = msg->body.fe_tune.tune_id;
 }
 
 static void close_frontend(struct satip_vtuner *vt)
 {
+  DEBUG(MSG_NET,"MSG_CLOSE_FRONTEND\n");
   satip_close(vt->satip_cfg);
 }
 
@@ -232,10 +227,10 @@ static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
       {
         if (satip_add_pid(vt->satip_cfg,msg->body.pidlist[i])==SATIPCFG_OK) {
 	  if (!hdr) {
-	    DEBUG(MSG_MAIN,"MSG_SET_PIDLIST:\n");
+	    DEBUG(MSG_NET,"MSG_SET_PIDLIST:\n");
 	    hdr=1;
 	  }
-	  DEBUG(MSG_MAIN,"%d\n",msg->body.pidlist[i]);
+	  DEBUG(MSG_NET,"%d\n",msg->body.pidlist[i]);
 	}
       }
 }
