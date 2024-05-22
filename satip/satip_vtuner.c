@@ -202,6 +202,9 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
 		       msg->body.fe_tune.fe_params.u.qam.modulation,
 		       msg->body.fe_tune.fe_params.u.qam.symbol_rate / 1000);
        break;
+     case SYS_DVBT2:
+       satip_set_dvbt2(vt->satip_cfg, msg->body.fe_tune.fe_params.frequency / 1000000);
+       break;
      default:
        ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_tune.fe_params.delivery_system);
        break;

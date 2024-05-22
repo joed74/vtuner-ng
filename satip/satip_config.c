@@ -28,6 +28,10 @@
 #define PID_ADD    2
 #define PID_DELETE 3
 
+#ifndef SYS_DVBT2
+#define SYS_DVBT2 16
+#endif
+
 #ifndef SYS_DVBC2
 #define SYS_DVBC2 19
 #endif
@@ -237,6 +241,17 @@ int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversio
   return SATIPCFG_OK;
 }
 
+int satip_set_dvbt2(t_satip_config* cfg, unsigned int freq)
+{
+  cfg->delsys = SYS_DVBT2;
+  cfg->frequency = freq;
+  cfg->status = SATIPCFG_CHANGED;
+
+  DEBUG(MSG_MAIN,"DVBT2 freq: %d\n", cfg->frequency);
+
+  return SATIPCFG_OK;
+}
+
 int satip_set_position(t_satip_config* cfg, int position)
 {
   if (position>0) DEBUG(MSG_NET,"SAT %i\n", position);
@@ -313,6 +328,13 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
                     strmap_modtype[cfg->mod_type],
 		    cfg->symbol_rate,
 		    strmap_inversion[cfg->inversion]);
+  }
+
+  if (cfg->delsys == SYS_DVBT2) {
+    /* DVB-T2 mandatory parameters */
+    printed = snprintf(str, maxlen,
+		     "&freq=%d&msys=dvbt2",
+		     cfg->frequency);
   }
 
   if (cfg->delsys == SYS_DVBS || cfg->delsys == SYS_DVBS2) {
