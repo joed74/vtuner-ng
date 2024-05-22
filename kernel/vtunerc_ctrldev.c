@@ -30,6 +30,7 @@
 #define VTUNER_MSG_LEN (sizeof(struct vtuner_message))
 #define VTUNER_SIG_LEN (sizeof(struct vtuner_signal))
 #define VTUNER_DELSYS_LEN (sizeof(struct vtuner_delsys))
+#define KERNEL_DELSYS_LEN (sizeof(((struct dvb_frontend_ops *)0)->delsys))
 
 static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
@@ -306,10 +307,12 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 		}
 		if (ret==0 && !ctx->fe) ret=-EFAULT;
 		if (ret==0) {
-			memcpy(&ctx->fe->ops.delsys, &delsys.value, MAX_DELSYS*sizeof(u8));
+			size_t delsyslen = min(KERNEL_DELSYS_LEN, VTUNER_DELSYS_LEN);
+			dvb_proxyfe_clear_delsys_info(ctx->fe);
+			memcpy(&ctx->fe->ops.delsys, &delsys.value, delsyslen);
 			printk(KERN_INFO "vtunerc%d: setting delsys to", ctx->idx);
-			for (i=0; i<VTUNER_MAX_DELSYS; i++) {
-				switch (delsys.value[i])
+			for (i=0; i<MAX_DELSYS; i++) {
+				switch (ctx->fe->ops.delsys[i])
 				{
 				    case 1:
 				      printk(KERN_CONT " DVBC");
