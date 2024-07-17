@@ -44,6 +44,10 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 #define VTUNERC_MAX_ADAPTERS	8
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
+#define vmalloc(...)		vmalloc_noprof(__VA_ARGS__)
+#endif
+
 static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 
 /* module params */
