@@ -181,7 +181,7 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
        pol = get_polarization(vt, msg);
        freq = get_sat_frequency(msg->body.fe_tune.fe_params.frequency, msg->body.fe_tune.fe_params.u.qpsk.sat.tone);
        satip_set_dvbs(vt->satip_cfg, freq / 10, pol,
-		       msg->body.fe_tune.fe_params.u.qpsk.modulation,
+		       msg->body.fe_tune.fe_params.modulation,
 		       msg->body.fe_tune.fe_params.u.qpsk.symbol_rate / 1000,
 		       msg->body.fe_tune.fe_params.u.qpsk.fec_inner);
        break;
@@ -189,7 +189,7 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
        pol = get_polarization(vt, msg);
        freq = get_sat_frequency(msg->body.fe_tune.fe_params.frequency, msg->body.fe_tune.fe_params.u.qpsk.sat.tone);
        satip_set_dvbs2(vt->satip_cfg, freq / 10, pol,
-		       msg->body.fe_tune.fe_params.u.qpsk.modulation,
+		       msg->body.fe_tune.fe_params.modulation,
 		       msg->body.fe_tune.fe_params.u.qpsk.symbol_rate / 1000,
 		       msg->body.fe_tune.fe_params.u.qpsk.fec_inner,
 		       msg->body.fe_tune.fe_params.u.qpsk.rolloff,
@@ -199,11 +199,19 @@ static void set_frontend(struct satip_vtuner* vt, struct vtuner_message* msg)
      case SYS_DVBC_ANNEX_B:
        satip_set_dvbc(vt->satip_cfg, msg->body.fe_tune.fe_params.frequency / 1000000,
 		       msg->body.fe_tune.fe_params.u.qam.inversion,
-		       msg->body.fe_tune.fe_params.u.qam.modulation,
+		       msg->body.fe_tune.fe_params.modulation,
 		       msg->body.fe_tune.fe_params.u.qam.symbol_rate / 1000);
        break;
+     case SYS_DVBT:
      case SYS_DVBT2:
-       satip_set_dvbt2(vt->satip_cfg, msg->body.fe_tune.fe_params.frequency / 1000000);
+       satip_set_dvbt(vt->satip_cfg, msg->body.fe_tune.fe_params.delivery_system,
+		       msg->body.fe_tune.fe_params.frequency / 1000000,
+		       msg->body.fe_tune.fe_params.u.ofdm.bandwidth / 1000000,
+		       msg->body.fe_tune.fe_params.u.ofdm.transmission_mode,
+		       msg->body.fe_tune.fe_params.modulation,
+		       msg->body.fe_tune.fe_params.u.ofdm.guard_interval,
+		       msg->body.fe_tune.fe_params.u.ofdm.code_rate_HP,
+		       msg->body.fe_tune.fe_params.u.ofdm.code_rate_LP);
        break;
      default:
        ERROR(MSG_MAIN,"unsupported delsys %i\n", msg->body.fe_tune.fe_params.delivery_system);
