@@ -54,7 +54,7 @@ static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 static struct vtunerc_config config = {
 	.devices = 1,
 	.debug = 0,
-	.timeout = 180
+	.timeout = 0
 };
 
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
@@ -782,4 +782,4 @@ module_param_named(debug, config.debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWG
 MODULE_PARM_DESC(debug, "Enable debug messages (default is 0)");
 
 module_param_named(timeout, config.timeout, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(timeout, "Timeout for closing frontends when only section streams are transmitted (default is 180)");
+MODULE_PARM_DESC(timeout, "Timeout for closing frontends when only section streams are transmitted (default is 0 = disabled)");

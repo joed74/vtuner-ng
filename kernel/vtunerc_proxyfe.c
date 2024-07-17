@@ -130,10 +130,11 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 
 	memset(&msg, 0, sizeof(msg));
 
-	timeout = ctx->config ? ctx->config->timeout : 180;
+	timeout = ctx->config ? ctx->config->timeout : 0;
+	if (timeout==0) timeout= INT_MAX;
 	if (timeout<30) timeout=30;
 	if (feedtab_only_secpids(ctx) && !re_tune && ctx->stat_time > 0 && (ktime_get_seconds()-ctx->stat_time) > timeout) {
-		dprintk(ctx, "MSG_CLOSE_FRONTEND\n");
+		printk(KERN_INFO "vtunerc%d: timeout, sending MSG_CLOSE_FRONTEND\n", ctx->idx);
 		ctx->stat_time = 0;
 		ctx->paused = 1;
 		ctx->fe_params.delivery_system = 0;
@@ -232,7 +233,7 @@ static int dvb_proxyfe_ts_bus_ctrl(struct dvb_frontend *fe, int aquire)
 	ctx->adapter_inuse=aquire;
 	if (aquire==0 && ctx->fe_params.frequency) {
 		ctx->status = FE_NONE;
-		dprintk(ctx, "MSG_CLOSE_FRONTEND\n");
+		printk(KERN_INFO "vtunerc%d: sending MSG_CLOSE_FRONTEND\n", ctx->idx);
 		memset(&msg, 0, sizeof(msg));
 		msg.type = MSG_CLOSE_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
