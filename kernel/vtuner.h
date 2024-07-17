@@ -75,12 +75,12 @@ struct sat_params {
 struct fe_params {
 	u32	delivery_system;
 	u32	frequency;
+	u32	modulation;
 	union {
 		struct {
 			// DVB-S , DVB-S2
 			u32	symbol_rate;
 			u32	fec_inner;
-			u32	modulation;
 			u32	pilot;
 			u32	rolloff;
 			struct sat_params sat;
@@ -88,7 +88,6 @@ struct fe_params {
 		struct {
 			// DVB-C
 			u32	symbol_rate;
-			u32	modulation;
 			u32	inversion;
 		} qam;
 		struct {
@@ -96,7 +95,6 @@ struct fe_params {
 			u32	bandwidth;
 			u32	code_rate_HP;
 			u32	code_rate_LP;
-			u32	constellation;
 			u32	transmission_mode;
 			u32	guard_interval;
 			u32	hierarchy_information;

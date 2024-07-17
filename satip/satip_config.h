@@ -68,6 +68,34 @@ typedef enum
     SATIPCFG_F_25
   } t_fec_inner;
 
+typedef enum
+  {
+    SATIPCFG_G_1_32,
+    SATIPCFG_G_1_16,
+    SATIPCFG_G_1_8,
+    SATIPCFG_G_1_4,
+    SATIPCFG_G_AUTO,
+    SATIPCFG_G_1_128,
+    SATIPCFG_G_19_128,
+    SATIPCFG_G_19_256,
+    SATIPCFG_G_PN420,
+    SATIPCFG_G_PN595,
+    SATIPCFG_G_PN945,
+    SATIPCFG_G_1_64,
+  } t_guard_interval;
+
+typedef enum
+  {
+    SATIPCFG_T_2K,
+    SATIPCFG_T_8K,
+    SATIPCFG_T_AUTO,
+    SATIPCFG_T_4K,
+    SATIPCFG_T_1K,
+    SATIPCFG_T_16K,
+    SATIPCFG_T_32K,
+    SATIPCFG_T_C1,
+    SATIPCFG_T_C3780,
+  } t_transmit_mode;
 
 typedef enum
   {
@@ -97,6 +125,9 @@ typedef struct satip_config
   unsigned int      symbol_rate;
   t_fec_inner       fec_inner;   
   unsigned int      inversion;
+  double	    bandwidth;
+  t_transmit_mode   transmission_mode;
+  t_guard_interval  guard_interval;
 
   /* remote frontend */
   int               frontend;
@@ -135,7 +166,7 @@ int satip_set_position(t_satip_config* cfg, int position);
 int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner);
 int satip_set_dvbs2(t_satip_config* cfg, unsigned int freq, t_polarization pol, unsigned int modtype, unsigned int symrate, t_fec_inner fecinner, t_roll_off rolloff, t_pilots pilots);
 int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversion, unsigned int modtype, unsigned int symrate);
-int satip_set_dvbt2(t_satip_config* cfg, unsigned int freq);
+int satip_set_dvbt(t_satip_config* cfg, unsigned int delsys, unsigned int freq, double bandwidth, t_transmit_mode transmission_mode,  unsigned int modtype, t_guard_interval guard_interval, t_fec_inner coderateHP, t_fec_inner coderateLP);
 
 int satip_valid_config(t_satip_config* cfg);
 int satip_tuning_required(t_satip_config* cfg);

@@ -159,6 +159,8 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	  return -EINVAL;
 	}
 
+	dprintk(ctx,"add ext pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
+
 	ctx->feedinfo[feed->index].id = -1;
 	ctx->feedinfo[feed->index].subid = -1;
 
@@ -174,6 +176,8 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
 	struct vtunerc_ctx *ctx = demux->priv;
+
+	dprintk(ctx,"del ext pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 
 	// called with demux mutex already locked
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
@@ -487,8 +491,8 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 		fep = &ctx->fe_params;
 		if (fep->frequency > 0 && fep->delivery_system > 0) {
 			delsys2str(seq, fep->delivery_system);
+			mod2str(seq, fep->modulation);
 			if (fep->delivery_system==SYS_DVBS || fep->delivery_system==SYS_DVBS2) {
-				mod2str(seq, fep->u.qpsk.modulation);
 				satfreq2str(seq, fep->frequency, fep->u.qpsk.sat.tone);
 				seq_printf(seq, " symbolrate       : %i\n", fep->u.qpsk.symbol_rate / 1000);
 				fec2str(seq, fep->u.qpsk.fec_inner);
@@ -497,10 +501,12 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			}
 			if (fep->delivery_system==SYS_DVBC_ANNEX_A || fep->delivery_system==SYS_DVBC_ANNEX_B || 
 			    fep->delivery_system==SYS_DVBC_ANNEX_C) {
-				mod2str(seq, fep->u.qam.modulation);
 				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 				seq_printf(seq, " symbolrate       : %i\n", fep->u.qam.symbol_rate / 1000);
 				inversion2str(seq, fep->u.qam.inversion);
+			}
+			if (fep->delivery_system==SYS_DVBT || fep->delivery_system==SYS_DVBT2) {
+				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 			}
 			seq_printf(seq, " pid tab          :");
 			mutex_lock(&ctx->demux.mutex);

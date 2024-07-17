@@ -36,12 +36,16 @@
 #define SYS_DVBC2 19
 #endif
 
+#define UNUSED(x) (void)(x)
+
 /* strings for query strings */
 char  const chrmap_polarization[] = { 'h', 'v', 'l', 'r' };
-char* const strmap_fecinner[] = { "","12","23","34","45","56","67","78","89","AUTO","35","910","25" };
-char* const strmap_rolloff[] = { "0.35","0.20","0.25","AUTO","0.15","0.10","0.05" };
-char* const strmap_modtype[] = { "qpsk","16qam","32qam","64qam","128qam","256qam","?","?","?","8psk" };
-char* const strmap_inversion[] = { "off", "on", "auto" };
+char* const strmap_fecinner[] = { "","12","23","34","45","56","67","78","89","auto","35","910","25" };
+char* const strmap_rolloff[] = { "0.35","0.20","0.25","auto","0.15","0.10","0.05" };
+char* const strmap_modtype[] = { "qpsk","16qam","32qam","64qam","128qam","256qam","auto","vsb8","vsb16","8psk" };
+char* const strmap_inversion[] = { "off","on","auto" };
+char* const strmap_transmission[] = { "2k","8k","auto","4k","1k","16k","32k","c1","c3780" };
+char* const strmap_guard[] = { "132","116","18","14","auto","1128","19128","19256","14","16","19","164" };
 
 t_satip_config* satip_new_config(int frontend)
 {
@@ -79,7 +83,7 @@ static void pidupdate_status(t_satip_config* cfg)
       if (mod_found)
 	cfg->status = SATIPCFG_PID_CHANGED;
       break;
-      
+
     case SATIPCFG_PID_CHANGED:
       if (!mod_found)
 	cfg->status = SATIPCFG_SETTLED;
@@ -99,7 +103,7 @@ void satip_del_allpid(t_satip_config* cfg)
   for ( i=0; i<SATIPCFG_MAX_PIDS; i++ )
     satip_del_pid(cfg, cfg->pid[i]);
 }
-      
+
 
 int satip_del_pid(t_satip_config* cfg,unsigned short pid)
 {
@@ -108,8 +112,8 @@ int satip_del_pid(t_satip_config* cfg,unsigned short pid)
   for (i=0; i<SATIPCFG_MAX_PIDS; i++)
     {
       if ( cfg->pid[i] == pid )
-	switch (cfg->mod_pid[i]) 
-	  {	    
+	switch (cfg->mod_pid[i])
+	  {
 	  case PID_VALID: /* mark it for deletion */
 	    cfg->mod_pid[i] = PID_DELETE;
 	    pidupdate_status(cfg);
@@ -122,12 +126,12 @@ int satip_del_pid(t_satip_config* cfg,unsigned short pid)
 
 	  case PID_IGNORE:
 	    break;
-	    
+
 	  case PID_DELETE: /* pid already deleted*/
 	    return SATIPCFG_NOCHANGE;
 	  }
     }
-  
+
   /* pid was not found, ignore request */
   return SATIPCFG_OK;
 }
@@ -149,8 +153,8 @@ int satip_add_pid(t_satip_config* cfg,unsigned short pid)
   for (i=0; i<SATIPCFG_MAX_PIDS; i++)
     {
       if ( cfg->pid[i] == pid )
-	switch (cfg->mod_pid[i]) 
-	  {	    
+	switch (cfg->mod_pid[i])
+	  {
 	  case PID_VALID: /* already present */
 	  case PID_ADD:   /* pid shall be already added */
 	    /* just return current status, no update required */
@@ -158,15 +162,15 @@ int satip_add_pid(t_satip_config* cfg,unsigned short pid)
 
 	  case PID_IGNORE:
 	    break;
-	    
-	  case PID_DELETE: 
+
+	  case PID_DELETE:
 	    /* pid shall be deleted, make it valid again */
 	    cfg->mod_pid[i] = PID_VALID;
 	    pidupdate_status(cfg);
-	    return SATIPCFG_OK;	    
+	    return SATIPCFG_OK;
 	  }
     }
-  
+
   /* pid was not found, add it */
   for ( i=0; i<SATIPCFG_MAX_PIDS; i++)
     {
@@ -178,7 +182,7 @@ int satip_add_pid(t_satip_config* cfg,unsigned short pid)
 	  return SATIPCFG_OK;
 	}
     }
-  
+
   /* could not add it */
   return SATIPCFG_ERROR;
 }
@@ -241,13 +245,25 @@ int satip_set_dvbc(t_satip_config* cfg, unsigned int freq, unsigned int inversio
   return SATIPCFG_OK;
 }
 
-int satip_set_dvbt2(t_satip_config* cfg, unsigned int freq)
+int satip_set_dvbt(t_satip_config* cfg, unsigned int delsys, unsigned int freq, double bandwidth, t_transmit_mode transmission_mode,
+		   unsigned int modtype, t_guard_interval guard_interval, t_fec_inner coderateHP, t_fec_inner coderateLP)
 {
-  cfg->delsys = SYS_DVBT2;
+  UNUSED(coderateLP);
+  cfg->delsys = delsys;
   cfg->frequency = freq;
+  cfg->mod_type = modtype;
+  cfg->bandwidth = bandwidth;
+  cfg->transmission_mode = transmission_mode;
+  cfg->guard_interval = guard_interval;
+  cfg->fec_inner = coderateHP;
   cfg->status = SATIPCFG_CHANGED;
 
-  DEBUG(MSG_MAIN,"DVBT2 freq: %d\n", cfg->frequency);
+  DEBUG(MSG_MAIN,"%sfreq: %d band: %1.3f mod: %s trans: %s guard: %s fec: %s\n",(delsys==SYS_DVBT) ? "DVBT  " : "DVBT2 ", 
+                  cfg->frequency, cfg->bandwidth,
+                  strmap_modtype[cfg->mod_type],
+                  strmap_transmission[cfg->transmission_mode],
+                  strmap_guard[cfg->guard_interval],
+                  strmap_fecinner[cfg->fec_inner]);
 
   return SATIPCFG_OK;
 }
@@ -291,7 +307,7 @@ static int setpidlist(t_satip_config* cfg, char* str,int maxlen,const char* firs
   int i;
   int printed=0;
   int first=1;
-  
+
   for ( i=0; i<SATIPCFG_MAX_PIDS; i++ )
 	if ( cfg->mod_pid[i] == modtype1 ||
 	     cfg->mod_pid[i] == modtype2 )
@@ -313,12 +329,13 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
 {
   int printed;
   char frontend_str[7]="";
-  
+
   /* optional: specific frontend */
   if ( cfg->frontend > 0 && cfg->frontend<100)
     sprintf(frontend_str, "fe=%d&", cfg->frontend);
 
   if (cfg->delsys == SYS_DVBC_ANNEX_A || cfg->delsys == SYS_DVBC_ANNEX_B) {
+    /* DVB-C mandatory parameters */
     printed = snprintf(str, maxlen,
 		    "src=%d&%sfreq=%d&msys=%s&mtype=%s&sr=%d&specinv=%s",
 		    cfg->position,
@@ -330,11 +347,20 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
 		    strmap_inversion[cfg->inversion]);
   }
 
-  if (cfg->delsys == SYS_DVBT2) {
+  if (cfg->delsys == SYS_DVBT || cfg->delsys == SYS_DVBT2) {
     /* DVB-T2 mandatory parameters */
     printed = snprintf(str, maxlen,
-		     "&freq=%d&msys=dvbt2",
-		     cfg->frequency);
+		     "src=%d&%sfreq=%d&msys=%s&mtype=%s",
+		     cfg->position,
+		     frontend_str,
+		     cfg->frequency,
+		     cfg->delsys == SYS_DVBT ? "dvbt" : "dvbt2",
+		     strmap_modtype[cfg->mod_type]);
+  }
+
+  if (cfg->delsys == SYS_DVBT2) {
+     /* DVB-T2 additional parameters */
+     printed += snprintf(str, maxlen-printed, "&plp=0&t2id=0&sm=0");
   }
 
   if (cfg->delsys == SYS_DVBS || cfg->delsys == SYS_DVBS2) {
@@ -364,7 +390,7 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
     }
 
   /* don´t forget to check on caller ! */
-  return printed;  
+  return printed;
 }
 
 
@@ -384,7 +410,7 @@ int satip_prepare_pids(t_satip_config* cfg, char* str, int maxlen,int modpid)
     }
   else
     {
-      printed = setpidlist(cfg,str,maxlen,"pids=",PID_VALID, PID_ADD);     
+      printed = setpidlist(cfg,str,maxlen,"pids=",PID_VALID, PID_ADD);
     }
 
   /* nothing was added, use "none" */
@@ -392,7 +418,7 @@ int satip_prepare_pids(t_satip_config* cfg, char* str, int maxlen,int modpid)
     {
       printed = snprintf(str,maxlen,"pids=none");
     }
-  
+
   /* don´t forget to check on caller */
   return printed;
 }
@@ -402,8 +428,8 @@ int satip_settle_config(t_satip_config* cfg)
   int i;
   int retval=SATIPCFG_OK;
 
-  
-  switch (cfg->status) 
+
+  switch (cfg->status)
     {
     case SATIPCFG_CHANGED:
     case SATIPCFG_PID_CHANGED:
@@ -435,7 +461,7 @@ void satip_clear_config(t_satip_config* cfg)
   int i;
 
   cfg->status    = SATIPCFG_INCOMPLETE;
-  
+
   for ( i=0; i<SATIPCFG_MAX_PIDS; i++)
     cfg->mod_pid[i]=PID_IGNORE;
 }

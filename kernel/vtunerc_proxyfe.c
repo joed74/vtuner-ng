@@ -151,13 +151,13 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 
 	msg.body.fe_tune.fe_params.delivery_system = c->delivery_system;
 	msg.body.fe_tune.fe_params.frequency = c->frequency;
+	msg.body.fe_tune.fe_params.modulation = c->modulation;
 
 	switch (c->delivery_system) {
 	case SYS_DVBS:
 	case SYS_DVBS2:
 		msg.body.fe_tune.fe_params.u.qpsk.symbol_rate = c->symbol_rate;
 		msg.body.fe_tune.fe_params.u.qpsk.fec_inner = c->fec_inner;
-		msg.body.fe_tune.fe_params.u.qpsk.modulation = c->modulation;
 		msg.body.fe_tune.fe_params.u.qpsk.pilot = c->pilot;
 		msg.body.fe_tune.fe_params.u.qpsk.rolloff = c->rolloff;
 		memcpy(&msg.body.fe_tune.fe_params.u.qpsk.sat, &ctx->fe_params.u.qpsk.sat, sizeof(struct sat_params));
@@ -167,7 +167,6 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 		msg.body.fe_tune.fe_params.u.ofdm.bandwidth = c->bandwidth_hz;
 		msg.body.fe_tune.fe_params.u.ofdm.code_rate_HP = c->code_rate_HP;
 		msg.body.fe_tune.fe_params.u.ofdm.code_rate_LP = c->code_rate_LP;
-		msg.body.fe_tune.fe_params.u.ofdm.constellation = c->modulation;
 		msg.body.fe_tune.fe_params.u.ofdm.transmission_mode = c->transmission_mode;
 		msg.body.fe_tune.fe_params.u.ofdm.guard_interval = c->guard_interval;
 		msg.body.fe_tune.fe_params.u.ofdm.hierarchy_information = c->hierarchy;
@@ -177,7 +176,6 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 	case SYS_DVBC_ANNEX_C:
 		msg.body.fe_tune.fe_params.u.qam.inversion = c->inversion;
 		msg.body.fe_tune.fe_params.u.qam.symbol_rate = c->symbol_rate;
-		msg.body.fe_tune.fe_params.u.qam.modulation = c->modulation;
 		break;
 	default:
 		printk(KERN_ERR "vtunerc%d: unregognized tuner type = %d\n", ctx->idx, c->delivery_system);
