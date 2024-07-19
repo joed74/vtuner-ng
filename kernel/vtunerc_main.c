@@ -23,6 +23,7 @@
 #include <asm/uaccess.h>
 #include <linux/delay.h>
 #include <linux/seq_file.h>
+#include <linux/vmalloc.h>
 #include "vtunerc_priv.h"
 
 #include <media/demux.h>
@@ -42,10 +43,6 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 #ifndef VTUNERC_MAX_ADAPTERS
 #define VTUNERC_MAX_ADAPTERS	8
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-#define vmalloc(...)		vmalloc_noprof(__VA_ARGS__)
 #endif
 
 static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };

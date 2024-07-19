@@ -112,6 +112,7 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune);
 void dvb_proxyfe_set_signal(struct vtunerc_ctx *ctx);
 void dvb_proxyfe_set_delsys_info(struct dvb_frontend *fe);
 void dvb_proxyfe_clear_delsys_info(struct dvb_frontend *fe);
+void dvb_proxyfe_set_stat(struct vtuner_dtv_fe_stats *vtuner_stats, struct dtv_fe_stats *dvb_stats);
 #define dprintk(ctx, fmt, arg...) do {				\
 if (ctx->config && (ctx->config->debug))			\
 	printk(KERN_DEBUG "vtunerc%d: " fmt, ctx->idx, ##arg);	\
