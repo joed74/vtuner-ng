@@ -336,15 +336,16 @@ int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen)
 
   if (cfg->delsys == SYS_DVBC_ANNEX_A || cfg->delsys == SYS_DVBC_ANNEX_B) {
     /* DVB-C mandatory parameters */
+    if (cfg->inversion>1) cfg->inversion=0;
     printed = snprintf(str, maxlen,
-		    "src=%d&%sfreq=%d&msys=%s&mtype=%s&sr=%d&specinv=%s",
+		    "src=%d&%sfreq=%d&msys=%s&mtype=%s&sr=%d&specinv=%i",
 		    cfg->position,
 		    frontend_str,
 		    cfg->frequency,
 		    cfg->delsys == SYS_DVBC2 ? "dvbc2" : "dvbc",
                     strmap_modtype[cfg->mod_type],
 		    cfg->symbol_rate,
-		    strmap_inversion[cfg->inversion]);
+		    cfg->inversion);
   }
 
   if (cfg->delsys == SYS_DVBT || cfg->delsys == SYS_DVBT2) {
