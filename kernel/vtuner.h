@@ -25,7 +25,7 @@
 #define MSG_CLOSE_FRONTEND		11
 #define MSG_PIDLIST			20
 
-#define MAX_PIDTAB_LEN			30
+#define MAX_PIDTAB_LEN			128
 
 #define PID_UNKNOWN 0xffff
 
