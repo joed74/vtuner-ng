@@ -673,7 +673,7 @@ static int __init vtunerc_init(void)
 			goto err_remove_mem_frontend;
 
 		vtunerc_frontend_init(ctx);
-		vtunerc_ca_init(ctx);
+		vtunerc_ca_init(ctx, 1);
 
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);

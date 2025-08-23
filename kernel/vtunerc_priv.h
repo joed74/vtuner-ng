@@ -107,7 +107,7 @@ void vtunerc_unregister_ctrldev(struct vtunerc_config *config);
 struct vtunerc_ctx *vtunerc_get_ctx(int minor);
 int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
-int vtunerc_ca_init(struct vtunerc_ctx *ctx);
+int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count);
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid);
