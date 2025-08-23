@@ -69,7 +69,7 @@ int vtunerc_ca_read_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addre
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	int myaddress=address/2;
-	printk(KERN_INFO "ca_read_attribute_mem slot=%i address=%i myaddress=%i\n", slot, address, myaddress);
+	//printk(KERN_INFO "ca_read_attribute_mem slot=%i address=%i myaddress=%i\n", slot, address, myaddress);
 	if (myaddress<0) return 0xFF;
 	if (myaddress>=sizeof(sl->tuple_mem)) return 0xFF;
 	return sl->tuple_mem[myaddress];
@@ -81,7 +81,7 @@ int vtunerc_ca_write_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addr
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	int myaddress=address/2;
-	printk(KERN_INFO "ca_write_attribute_mem slot=%i address=%i value=%i\n", slot, address, value);
+	//printk(KERN_INFO "ca_write_attribute_mem slot=%i address=%i value=%i\n", slot, address, value);
 	if (myaddress<0) return -EIO;
 	if (myaddress>=sizeof(sl->tuple_mem)) return 0xFF;
 	sl->tuple_mem[myaddress]=value;
@@ -116,23 +116,32 @@ int vtunerc_ca_write_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address
 
 int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecount)
 {
+	int i;
 	printk(KERN_INFO "ca_read_data slot=%i data=%p count=%i\n", slot, ebuf, ecount);
-	return -EIO;
+	for (i=0; i<ecount; i++) ebuf[i]=0xff;
+	return ecount;
 }
 
 int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecount)
 {
 	printk(KERN_INFO "ca_write_data slot=%i data=%p count=%i\n", slot, ebuf, ecount);
-	return -EIO;
+	return ecount;
 }
 
 int vtunerc_ca_slot_reset(struct dvb_ca_en50221 *ca, int slot)
 {
+	printk(KERN_INFO "ca_slot_reset slot=%i\n", slot);
+	dvb_ca_en50221_camready_irq(ca, slot);
 	return 0;
 }
 
 int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 {
+        struct vtunerc_ca_private *priv = ca->data;
+        struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
+
+	printk(KERN_INFO "ca_slot_shutdown slot=%i\n", slot);
+	sl->nextstatus=STATUSREG_DA|STATUSREG_FR;
 	return 0;
 }
 
@@ -142,16 +151,9 @@ int vtunerc_ca_slot_ts_enable(struct dvb_ca_en50221 *ca, int slot)
 	return 0;
 }
 
-int vtunerc_ca_poll_slot_status(struct dvb_ca_en50221 *ca, int slot, int open)
-{
-	return DVB_CA_EN50221_POLL_CAM_READY;
-}
-
 int vtunerc_ca_insert(struct vtunerc_ctx *ctx, int slot)
 {
 	dvb_ca_en50221_camchange_irq(&ctx->pubca, slot, DVB_CA_EN50221_CAMCHANGE_INSERTED);
-	mdelay(200);
-	dvb_ca_en50221_camready_irq(&ctx->pubca, slot);
 	return 0;
 }
 
@@ -196,7 +198,6 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count)
 	ctx->pubca.slot_reset = vtunerc_ca_slot_reset;
 	ctx->pubca.slot_shutdown = vtunerc_ca_slot_shutdown;
 	ctx->pubca.slot_ts_enable = vtunerc_ca_slot_ts_enable;
-	ctx->pubca.poll_slot_status = vtunerc_ca_poll_slot_status;
 	ret = dvb_ca_en50221_init(&ctx->dvb_adapter, &ctx->pubca,
 			DVB_CA_EN50221_FLAG_IRQ_CAMCHANGE | 
 			DVB_CA_EN50221_FLAG_IRQ_FR | 
