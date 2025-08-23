@@ -4,7 +4,7 @@
 
 VTUNERC_MAX_ADAPTERS ?= 8
 
-vtunerc-objs = vtunerc_main.o vtunerc_ctrldev.o vtunerc_proxyfe.o
+vtunerc-objs = vtunerc_main.o vtunerc_ctrldev.o vtunerc_proxyfe.o vtunerc_proxyca.o
 
 CONFIG_DVB_VTUNERC ?= m
 

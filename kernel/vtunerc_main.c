@@ -673,6 +673,7 @@ static int __init vtunerc_init(void)
 			goto err_remove_mem_frontend;
 
 		vtunerc_frontend_init(ctx);
+		vtunerc_ca_init(ctx);
 
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
@@ -735,8 +736,9 @@ static void __exit vtunerc_exit(void)
 		remove_proc_entry(ctx->procname, NULL);
 		kfree(ctx->procname);
 #endif
-		vfree(ctx->mem);
+		vtunerc_ca_clear(ctx);
 
+		vfree(ctx->mem);
 		vtunerc_frontend_clear(ctx);
 
 		dvbdemux = &ctx->demux;
