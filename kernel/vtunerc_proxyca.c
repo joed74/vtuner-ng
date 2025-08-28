@@ -14,7 +14,15 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <media/dvb_ringbuffer.h>
+
 #include "vtunerc_priv.h"
+
+#define BUFFER_SIZE 8192
+#define PKT_READY 0
+#define PKT_DISPOSED 1
 
 #define CTRLIF_DATA 0
 #define CTRLIF_COMMAND 1
@@ -53,8 +61,9 @@
 #define AOT_CA_PMT_REPLY		0x9F8033
 #define AOT_APPLICATION_INFO_ENQ	0x9F8020
 
-#define RI_APPLICATION_INFORMATION 	0x00020041
-#define RI_CONDITIONAL_ACCESS_SUPPORT	0x00030041
+#define RI_APPLICATION_INFORMATION 		0x00020041
+#define RI_CONDITIONAL_ACCESS_SUPPORT		0x00030041
+#define RI_CONDITIONAL_ACCESS_SUPPORT_CIPLUS	0x00030081
 
 const u8 tuple_mem[128]={ 0x1d,0x04,0x02,0x08,0x00,0xff, // CISTPL_DEVICE_0A
 		    0x1c,0x04,0x02,0x08,0x00,0xff, // CISTPL_DEVICE_0C
@@ -70,12 +79,11 @@ const u8 tuple_mem[128]={ 0x1d,0x04,0x02,0x08,0x00,0xff, // CISTPL_DEVICE_0A
 };
 
 struct vtunerc_ca_slot {
-	u8 nextstatus;
-	u8 tuple_mem[128];
-	u8 data_length;
-	u8 data_mem[255];
 	bool ca_session;
 	bool ai_session;
+	u8 nextstatus;
+	u8 tuple_mem[128];
+	struct dvb_ringbuffer rbuf;
 };
 
 struct vtunerc_ca_private {
@@ -102,13 +110,106 @@ struct vtunerc_spdu {
 	u8 aot_length;
 } __attribute__ ((packed));
 
+ssize_t dvb_ringbuffer_pkt_write(struct dvb_ringbuffer *rbuf, u8* buf, size_t len)
+{
+	int status;
+	ssize_t oldpwrite = rbuf->pwrite;
+
+	DVB_RINGBUFFER_WRITE_BYTE(rbuf, len >> 8);
+	DVB_RINGBUFFER_WRITE_BYTE(rbuf, len & 0xff);
+	DVB_RINGBUFFER_WRITE_BYTE(rbuf, PKT_READY);
+	status = dvb_ringbuffer_write(rbuf, buf, len);
+
+	if (status < 0) rbuf->pwrite = oldpwrite;
+	return status;
+}
+
+ssize_t dvb_ringbuffer_pkt_next(struct dvb_ringbuffer *rbuf, size_t idx, size_t* pktlen)
+{
+	int consumed;
+	int curpktlen;
+	int curpktstatus;
+
+	if (idx == -1) {
+	       idx = rbuf->pread;
+	} else {
+		curpktlen = rbuf->data[idx] << 8;
+		curpktlen |= rbuf->data[(idx + 1) % rbuf->size];
+		idx = (idx + curpktlen + DVB_RINGBUFFER_PKTHDRSIZE) % rbuf->size;
+	}
+
+	consumed = (idx - rbuf->pread) % rbuf->size;
+
+	while((dvb_ringbuffer_avail(rbuf) - consumed) > DVB_RINGBUFFER_PKTHDRSIZE) {
+
+		curpktlen = rbuf->data[idx] << 8;
+		curpktlen |= rbuf->data[(idx + 1) % rbuf->size];
+		curpktstatus = rbuf->data[(idx + 2) % rbuf->size];
+
+		if (curpktstatus == PKT_READY) {
+			*pktlen = curpktlen;
+			return idx;
+		}
+
+		consumed += curpktlen + DVB_RINGBUFFER_PKTHDRSIZE;
+		idx = (idx + curpktlen + DVB_RINGBUFFER_PKTHDRSIZE) % rbuf->size;
+	}
+
+	// no packets available
+	return -1;
+}
+
+ssize_t dvb_ringbuffer_pkt_read(struct dvb_ringbuffer *rbuf, size_t idx,
+				int offset, u8* buf, size_t len)
+{
+	size_t todo;
+	size_t split;
+	size_t pktlen;
+
+	pktlen = rbuf->data[idx] << 8;
+	pktlen |= rbuf->data[(idx + 1) % rbuf->size];
+	if (offset > pktlen) return -EINVAL;
+	if ((offset + len) > pktlen) len = pktlen - offset;
+
+	idx = (idx + DVB_RINGBUFFER_PKTHDRSIZE + offset) % rbuf->size;
+	todo = len;
+	split = ((idx + len) > rbuf->size) ? rbuf->size - idx : 0;
+	if (split > 0) {
+		memcpy(buf, rbuf->data+idx, split);
+		buf += split;
+		todo -= split;
+		idx = 0;
+	}
+	memcpy(buf, rbuf->data+idx, todo);
+	return len;
+}
+
+void dvb_ringbuffer_pkt_dispose(struct dvb_ringbuffer *rbuf, size_t idx)
+{
+	size_t pktlen;
+
+	rbuf->data[(idx + 2) % rbuf->size] = PKT_DISPOSED;
+
+	// clean up disposed packets
+	while(dvb_ringbuffer_avail(rbuf) > DVB_RINGBUFFER_PKTHDRSIZE) {
+		if (DVB_RINGBUFFER_PEEK(rbuf, 2) == PKT_DISPOSED) {
+			pktlen = DVB_RINGBUFFER_PEEK(rbuf, 0) << 8;
+			pktlen |= DVB_RINGBUFFER_PEEK(rbuf, 1);
+			DVB_RINGBUFFER_SKIP(rbuf, pktlen + DVB_RINGBUFFER_PKTHDRSIZE);
+		} else {
+			// first packet is not disposed, so we stop cleaning now
+			break;
+		}
+	}
+}
+
 int vtunerc_ca_read_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int address)
 {
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	int myaddress=address/2;
-	//printk(KERN_INFO "ca_read_attribute_mem slot=%i address=%i myaddress=%i\n", slot, address, myaddress);
+	pprintk(priv->ctx, "CAM: ca_read_attribute_mem slot=%i address=%i myaddress=%i\n", slot, address, myaddress);
 	if (myaddress<0) return 0xFF;
 	if (myaddress>=sizeof(sl->tuple_mem)) return 0xFF;
 	return sl->tuple_mem[myaddress];
@@ -120,7 +221,7 @@ int vtunerc_ca_write_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addr
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	int myaddress=address/2;
-	//printk(KERN_INFO "ca_write_attribute_mem slot=%i address=%i value=%i\n", slot, address, value);
+	pprintk(priv->ctx, "CAM: ca_write_attribute_mem slot=%i address=%i value=%i\n", slot, address, value);
 	if (myaddress<0) return -EIO;
 	if (myaddress>=sizeof(sl->tuple_mem)) return 0xFF;
 	sl->tuple_mem[myaddress]=value;
@@ -132,11 +233,11 @@ int vtunerc_ca_read_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address)
 	struct vtunerc_ca_private *priv = ca->data;
 	struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
-	//printk(KERN_INFO "ca_read_cam_control slot=%i address=%i\n", slot, address);
+	pprintk(priv->ctx, "CAM: ca_read_cam_control slot=%i address=%i\n", slot, address);
 	if (address==CTRLIF_STATUS) return sl->nextstatus;
 	if (address==CTRLIF_SIZE_HIGH) return 0;
 	if (address==CTRLIF_SIZE_LOW) return 2; // 2 bytes
-	if (address==CTRLIF_DATA) return 0xff; // "data"
+	if (address==CTRLIF_DATA) return 0xff; // fake data
 	return -EIO;
 }
 
@@ -145,7 +246,7 @@ int vtunerc_ca_write_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
-	//printk(KERN_INFO "ca_write_cam_control slot=%i address=%i value=%i\n",slot, address, value);
+	pprintk(priv->ctx, "CAM: ca_write_cam_control slot=%i address=%i value=%i\n",slot, address, value);
 	if (address==CTRLIF_COMMAND) {
 	    if (value == (IRQEN|CMDREG_SR)) sl->nextstatus=STATUSREG_DA;
 	    if (value == (IRQEN|CMDREG_SW)) sl->nextstatus=STATUSREG_FR;
@@ -188,34 +289,34 @@ int vtunerc_ca_send_session_request(u8 *buf, u8 slot, u8 tcid, u32 resource_id)
 	return 11;
 }
 
-int vtunerc_ca_send_ca_info(u8 *ebuf, struct vtunerc_ca_slot *sl)
+int vtunerc_ca_send_ca_info(u8 *ebuf, u8 *rbuf)
 {
 	// copy most of request
-	memcpy(ebuf, sl->data_mem, 12);
+	memcpy(ebuf, rbuf, 12);
 	ebuf[11]=0x31; // AOT_CA_INFO
 	ebuf[12]=0x02;
-	ebuf[13]=0x22; // CA-ID
-	ebuf[14]=0x23; // CA-ID
+	ebuf[13]=0x0d; // CA-ID
+	ebuf[14]=0x98; // CA-ID
 	return 15;
 }
 
-int vtunerc_ca_send_pmt_reply(u8 *ebuf, struct vtunerc_ca_slot *sl)
+int vtunerc_ca_send_pmt_reply(u8 *ebuf, u8 *rbuf)
 {
 	// copy most of request
-	memcpy(ebuf, sl->data_mem, 12);
+	memcpy(ebuf, rbuf, 12);
 	ebuf[11]=0x33; // AOT_CA_PMT_REPLY
 	ebuf[12]=0x04; // length field
-	ebuf[13]=sl->data_mem[14]; // program_number
-	ebuf[14]=sl->data_mem[15];
-	ebuf[15]=sl->data_mem[16]; // version_number + current_next_indicator
+	ebuf[13]=rbuf[14]; // program_number
+	ebuf[14]=rbuf[15];
+	ebuf[15]=rbuf[16]; // version_number + current_next_indicator
 	ebuf[16]=0x81; // "descrambling possible"
 	return 17;
 }
 
-int vtunerc_ca_send_app_info(u8 *ebuf, struct vtunerc_ca_slot *sl)
+int vtunerc_ca_send_app_info(u8 *ebuf, u8 *rbuf)
 {
 	// copy most of request
-	memcpy(ebuf, sl->data_mem, 12);
+	memcpy(ebuf, rbuf, 12);
 	ebuf[11]=0x21; // AOT_APPLICATION_INFO
 	ebuf[12]=0x0f; // length field
 	ebuf[13]=0x01;
@@ -242,57 +343,67 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 	struct vtunerc_tpdu *tpdu;
 	struct vtunerc_spdu *spdu;
+	u8 rbuffer[256];
 
-	if (!sl->data_length) return 0;
+	size_t reqlen;
+	ssize_t idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &reqlen);
+	if (idx==-1) return 0;
+	dvb_ringbuffer_pkt_read(&sl->rbuf, idx, 0, (u8*) &rbuffer, reqlen);
+	dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);
+
+	//print_hex_dump_bytes("ca_read_data< ", DUMP_PREFIX_NONE, rbuffer, reqlen);
+
 	ecount=0;
-
-	tpdu = (void *) sl->data_mem; // last data received
+	tpdu = (void *) rbuffer; // last request data received
 	if (tpdu->tag==T_CREATE_TC) {
+		pprintk(priv->ctx, "CAM: create tc\n");
 		ecount=vtunerc_ca_send_ctc_reply(ebuf, tpdu->slot, tpdu->tcid);
 	} else if (tpdu->tag==T_DATA_LAST) {
 		// now answer some requests
-		if (sl->data_length<=6) {
+		if (reqlen<=6) {
 			if (sl->ai_session && !sl->ca_session) {
+				pprintk(priv->ctx,"CAM: create ca support session\n");
 			       	ecount=vtunerc_ca_send_session_request(ebuf, tpdu->slot, tpdu->tcid, RI_CONDITIONAL_ACCESS_SUPPORT);
 				sl->ca_session=true;
 			} else if (!sl->ai_session) {
+				pprintk(priv->ctx,"CAM: create app info session\n");
 				ecount=vtunerc_ca_send_session_request(ebuf, tpdu->slot, tpdu->tcid, RI_APPLICATION_INFORMATION);
 				sl->ai_session=true;
 			} else {
 				ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
 			}
 		} else {
-			spdu = (void *) &sl->data_mem[3];
+			spdu = (void *) &rbuffer[3];
 			if (spdu->tag == ST_SESSION_NUMBER) {
 				int aot = spdu->aot0<<16 | spdu->aot1<<8 | spdu->aot2;
 				switch (aot) {
 					case AOT_CA_INFO_ENQ:
-						ecount=vtunerc_ca_send_ca_info(ebuf, sl);
+						pprintk(priv->ctx,"CAM: answer ca_info_enq\n");
+						ecount=vtunerc_ca_send_ca_info(ebuf, (u8*) &rbuffer);
 						break;
 					case AOT_CA_PMT:
-						ecount=vtunerc_ca_send_pmt_reply(ebuf, sl);
+						pprintk(priv->ctx,"CAM: answer ca_pmt\n");
+						ecount=vtunerc_ca_send_pmt_reply(ebuf, (u8*) &rbuffer);
 						break;
 					case AOT_APPLICATION_INFO_ENQ:
-						ecount=vtunerc_ca_send_app_info(ebuf, sl);
+						pprintk(priv->ctx,"CAM: answer app_info_enq\n");
+						ecount=vtunerc_ca_send_app_info(ebuf, (u8*) &rbuffer);
 						break;
 				}
 		     }
 	     }
 	}
-	sl->data_length=0; // next read return zero
 	if (ecount<=30 && ebuf[2]!=T_SB) print_hex_dump_bytes("ca_read_data  ", DUMP_PREFIX_NONE, ebuf, ecount);
 	return ecount;
 }
 
-int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecount)
+static int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecount)
 {
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	if (ecount>255) return -EINVAL;
-	memcpy(&sl->data_mem,ebuf,ecount);
-	sl->data_length=ecount;
-
+	dvb_ringbuffer_pkt_write(&sl->rbuf, ebuf, ecount);
 	if (ecount<=30) {
 		if (ebuf[2]==T_DATA_LAST && ebuf[3]==1) return ecount;
 		print_hex_dump_bytes("ca_write_data ", DUMP_PREFIX_NONE, ebuf, ecount);
@@ -308,12 +419,18 @@ int vtunerc_ca_slot_reset(struct dvb_ca_en50221 *ca, int slot)
 
 int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 {
+	int idx;
+	size_t pktlen;
+
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	sl->ca_session=false;
 	sl->ai_session=false;
-	sl->data_length=0;
+	do {
+		idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &pktlen);
+		if (idx!=-1) dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);
+	} while (idx!=-1);
 	sl->nextstatus=STATUSREG_DA|STATUSREG_FR;
 	return 0;
 }
@@ -341,6 +458,7 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count)
 	int ret;
 	int i;
 	struct vtunerc_ca_private *ca = NULL;
+	void *buf;
 
 	ca = kzalloc(sizeof(*ca), GFP_KERNEL);
 	if (!ca) return -ENOMEM;
@@ -358,6 +476,8 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count)
 		struct vtunerc_ca_slot *sl = &ca->slot_info[i];
 		sl->nextstatus=0xC0;
 		memcpy(sl->tuple_mem,&tuple_mem,sizeof(tuple_mem));
+		buf = vmalloc(BUFFER_SIZE);
+		dvb_ringbuffer_init(&sl->rbuf, buf, BUFFER_SIZE);
 	}
 	ctx->pubca.data = ca;
 
@@ -385,11 +505,17 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count)
 
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx)
 {
+	int i;
+
 	if (!ctx) return -EINVAL;
 	if (ctx->pubca.private!=NULL) dvb_ca_en50221_release(&ctx->pubca);
 	ctx->pubca.private=NULL;
 	if (ctx->pubca.data) {
 		struct vtunerc_ca_private *ca = ctx->pubca.data;
+		for (i=0; i<ca->slot_count; i++) {
+			struct vtunerc_ca_slot *sl = &ca->slot_info[i];
+			if (sl->rbuf.data) vfree(sl->rbuf.data);
+		}
 		kfree(ca->slot_info);
 		kfree(ca);
 		ctx->pubca.data=NULL;
