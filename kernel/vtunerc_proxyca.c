@@ -527,7 +527,7 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count)
 	for (i=0; i< slot_count; i++) {
 		struct vtunerc_ca_slot *sl = &ca->slot_info[i];
 		sl->nextstatus=0xC0;
-		sl->info.slot=i+1;
+		sl->info.slot=i;
 		memcpy(sl->tuple_mem,&tuple_mem,sizeof(tuple_mem));
 		buf = vmalloc(BUFFER_SIZE);
 		// TODO: what to do if buf is null?
