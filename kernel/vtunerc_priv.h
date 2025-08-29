@@ -51,6 +51,13 @@ struct vtunerc_feedinfo {
 	int subid;
 };
 
+struct vtunerc_cainfo {
+	int slot;
+	int service;
+	int pmt;
+	int pid;
+};
+
 struct vtunerc_ctx {
 
 	/* DVB api */
@@ -73,9 +80,6 @@ struct vtunerc_ctx {
 	u8 status;
 
 	u8 tune_id;
-	u16 scrambled_pid;
-	u16 scrambled_program;
-	u16 scrambled_pmt;
 
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;
@@ -112,10 +116,11 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count);
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx);
+struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int service);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid);
 bool feedtab_only_secpids(struct vtunerc_ctx *ctx);
-void send_pidlist(struct vtunerc_ctx *ctx, bool retune);
+void send_pidlist(struct vtunerc_ctx *ctx, struct vtunerc_cainfo *ci, bool retune);
 void dvb_proxyfe_set_signal(struct vtunerc_ctx *ctx);
 void dvb_proxyfe_set_delsys_info(struct dvb_frontend *fe);
 void dvb_proxyfe_clear_delsys_info(struct dvb_frontend *fe);

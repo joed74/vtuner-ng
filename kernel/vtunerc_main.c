@@ -80,7 +80,7 @@ bool feedtab_only_secpids(struct vtunerc_ctx *ctx)
         return ret;
 }
 
-void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
+void send_pidlist(struct vtunerc_ctx *ctx, struct vtunerc_cainfo *ci, bool retune)
 {
 	struct vtuner_message msg;
 	struct dvb_demux_feed *entry;
@@ -131,14 +131,14 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 		}
 	}
 
-	if (ctx->scrambled_pmt) {
+	if (ci && ci->pmt) {
 		// if we have an "scrambled" pmt, send it
-		epmt = 0xe000 | ctx->scrambled_pmt;
+		epmt = 0xe000 | ci->pmt;
 		for (i=0; i<MAX_PIDTAB_LEN; i++) {
 			if (msg.body.pidlist[i] == epmt) break; // already on list
 			if (msg.body.pidlist[i] == PID_UNKNOWN) {
 				msg.body.pidlist[i] = epmt; // add to list
-				pprintk_cont(ctx, " %i(PMT)", ctx->scrambled_pmt);
+				pprintk_cont(ctx, " %i(PMT)", ci->pmt);
 				break;
 			}
 		}
@@ -183,7 +183,7 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "add pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	ctx->paused = 0;
-	send_pidlist(ctx, false);
+	send_pidlist(ctx, NULL, false);
 	return 0;
 }
 
@@ -198,7 +198,7 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 	if (feed->pid==0 || (feed->pid>=16 && feed->pid<=20)) return 0;
 	dprintk(ctx, "del pid %i%s\n", feed->pid, (feed->type==DMX_TYPE_SEC) ? "s" : "t");
 	feed->state = DMX_STATE_ALLOCATED; // we must set this here!
-	if (feed->type==DMX_TYPE_SEC) send_pidlist(ctx, false);
+	if (feed->type==DMX_TYPE_SEC) send_pidlist(ctx, NULL, false);
 	return 0;
 }
 
@@ -523,12 +523,14 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			if (fep->delivery_system==SYS_DVBT || fep->delivery_system==SYS_DVBT2) {
 				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 			}
+			/*
 			seq_printf(seq, " scrambled        : %s", ctx->scrambled_pid==0 ? "no" : "yes");
 			if (ctx->scrambled_pid) {
 				seq_printf(seq, " (PMT=%i)\n", ctx->scrambled_pmt);
 			} else {
 				seq_puts(seq, "\n");
 			}
+			*/
 			seq_printf(seq, " pid tab          :");
 			mutex_lock(&ctx->demux.mutex);
 			list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
@@ -693,7 +695,7 @@ static int __init vtunerc_init(void)
 			goto err_remove_mem_frontend;
 
 		vtunerc_frontend_init(ctx);
-		vtunerc_ca_init(ctx, 1);
+		vtunerc_ca_init(ctx, 2);
 
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);

@@ -41,6 +41,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 	int tailsize, i, cc, cc_, idx, offs, pf, pesh, tune_id, ts, service, pmt;
 	bool sendfiller, pusi;
 	struct vtunerc_feedinfo *fi;
+	struct vtunerc_cainfo *ci;
 
 	if (len < 188) {
 		printk(KERN_ERR "vtunerc%d: Data is shorter then TS packet size (%lu < 188)\n", ctx->idx, len);
@@ -158,21 +159,22 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 							pf = ctx->kernel_buf[i+offs];
 							if (offs+1+pf<188) {
 								fi->id = ctx->kernel_buf[i+offs+1+pf];
-								if (fi->id==0 && ctx->scrambled_pid && ctx->scrambled_program) {
+								if (fi->id==0) {
 									ts = i+offs+1+pf+8; // table start
 									// now find pmt for service / program id
 									do {
 										service=ctx->kernel_buf[ts]*256+ctx->kernel_buf[ts+1];
 										pmt=(ctx->kernel_buf[ts+2]*256+ctx->kernel_buf[ts+3]) & 0x1FFF;
-										if (service==ctx->scrambled_program) {
-											ctx->scrambled_pmt = pmt;
+										ci = vtunerc_ca_find(ctx, 0, service);
+										if (ci) {
+											ci->pmt = pmt;
 											break;
 										}
 										ts+=4;
 									} while (service!=0xffff);
 									if (service!=0xffff) {
-										pprintk(ctx,"CAM: found %i as PMT pid for %i\n", ctx->scrambled_pmt, ctx->scrambled_program);
-										send_pidlist(ctx, false);
+										pprintk(ctx,"CAM %i: found %i as PMT pid for %i\n", ci->slot, ci->pmt, ci->service);
+										send_pidlist(ctx, ci, false);
 									}
 								}
 							}

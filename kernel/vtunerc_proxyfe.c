@@ -203,7 +203,7 @@ static int dvb_proxyfe_tune(struct dvb_frontend *fe, bool re_tune, unsigned int 
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 		memcpy(&ctx->fe_params, &msg.body.fe_tune.fe_params, sizeof(struct fe_params));
 
-		send_pidlist(ctx, true);
+		send_pidlist(ctx, NULL, true);
 	}
 	return 0;
 }
