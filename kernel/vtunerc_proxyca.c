@@ -107,7 +107,14 @@ struct vtunerc_spdu {
 	u8 aot0;
 	u8 aot1;
 	u8 aot2;
-	u8 aot_length;
+} __attribute__ ((packed));
+
+struct vtunerc_pmt {
+	u8 length;
+	u8 list_management;
+	u16 program_number;
+	u8 version_next_indicator;
+	u16 program_info_length;
 } __attribute__ ((packed));
 
 ssize_t dvb_ringbuffer_pkt_write(struct dvb_ringbuffer *rbuf, u8* buf, size_t len)
@@ -294,10 +301,12 @@ int vtunerc_ca_send_ca_info(u8 *ebuf, u8 *rbuf)
 	// copy most of request
 	memcpy(ebuf, rbuf, 12);
 	ebuf[11]=0x31; // AOT_CA_INFO
-	ebuf[12]=0x02;
+	ebuf[12]=0x04;
 	ebuf[13]=0x0d; // CA-ID
 	ebuf[14]=0x98; // CA-ID
-	return 15;
+	ebuf[15]=0x09; // CA-ID
+	ebuf[16]=0x8c; // CA-ID
+	return 17;
 }
 
 int vtunerc_ca_send_pmt_reply(u8 *ebuf, u8 *rbuf)
@@ -343,7 +352,9 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 	struct vtunerc_tpdu *tpdu;
 	struct vtunerc_spdu *spdu;
+	struct vtunerc_pmt *pmt;
 	u8 rbuffer[256];
+	int ptr;
 
 	size_t reqlen;
 	ssize_t idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &reqlen);
@@ -382,6 +393,22 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 						ecount=vtunerc_ca_send_ca_info(ebuf, (u8*) &rbuffer);
 						break;
 					case AOT_CA_PMT:
+						pmt = (void *) &rbuffer[12];
+						//pprintk(priv->ctx,"CAM: list_management=%i program-number=%i pil=%i\n", pmt->list_management, pmt->program_number, cpu_to_be16(pmt->program_info_length));
+						if (pmt->length>8 && (pmt->list_management==4 || pmt->list_management==5) && pmt->program_number!=0 && pmt->program_info_length!=0) {
+							if (rbuffer[19]==0x04) {
+								pprintk(priv->ctx,"CAM: unassigned\n");
+								priv->ctx->scrambled_pid = 0;
+							}
+							if (rbuffer[19]==0x01) {
+								pprintk(priv->ctx, "CAM: assigned\n");
+								ptr = 20 + cpu_to_be16(pmt->program_info_length);
+								if (ptr+1<reqlen) {
+									priv->ctx->scrambled_pid = rbuffer[ptr]*256+rbuffer[ptr+1];
+									pprintk(priv->ctx, "CAM: got pid %x (%i)\n", priv->ctx->scrambled_pid, priv->ctx->scrambled_pid);
+								}
+							}
+						}
 						pprintk(priv->ctx,"CAM: answer ca_pmt\n");
 						ecount=vtunerc_ca_send_pmt_reply(ebuf, (u8*) &rbuffer);
 						break;
@@ -393,7 +420,7 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 		     }
 	     }
 	}
-	if (ecount<=30 && ebuf[2]!=T_SB) print_hex_dump_bytes("ca_read_data  ", DUMP_PREFIX_NONE, ebuf, ecount);
+	if (ecount<=255 && ebuf[2]!=T_SB) print_hex_dump_bytes("ca_read_data  ", DUMP_PREFIX_NONE, ebuf, ecount);
 	return ecount;
 }
 
@@ -404,10 +431,8 @@ static int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, 
 
 	if (ecount>255) return -EINVAL;
 	dvb_ringbuffer_pkt_write(&sl->rbuf, ebuf, ecount);
-	if (ecount<=30) {
-		if (ebuf[2]==T_DATA_LAST && ebuf[3]==1) return ecount;
-		print_hex_dump_bytes("ca_write_data ", DUMP_PREFIX_NONE, ebuf, ecount);
-	}
+	if (ebuf[2]==T_DATA_LAST && ebuf[3]==1) return ecount;
+	print_hex_dump_bytes("ca_write_data ", DUMP_PREFIX_NONE, ebuf, ecount);
 	return ecount;
 }
 
@@ -425,6 +450,7 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
+	priv->ctx->scrambled_pid=0;
 	sl->ca_session=false;
 	sl->ai_session=false;
 	do {

@@ -156,8 +156,12 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 							ctx->demux.feed[idx].pusi_seen = 1;
 							// PSI
 							pf = ctx->kernel_buf[i+offs];
-							if (offs+1+pf<188)
+							if (offs+1+pf<188) {
 								fi->id = ctx->kernel_buf[i+offs+1+pf];
+								if (fi->id==2 && ctx->scrambled_pid) {
+									pprintk(ctx,"got PMT for scrambled channel: %i\n", ctx->demux.feed[idx].pid);
+								}
+							}
 						}
 					}
 				}
