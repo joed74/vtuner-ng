@@ -84,6 +84,9 @@ struct vtunerc_ca_slot {
 	u8 nextstatus;
 	u8 tuple_mem[128];
 	struct dvb_ringbuffer rbuf;
+	u16 service;
+	u16 pmt;
+	u16 pid;
 };
 
 struct vtunerc_ca_private {
@@ -398,17 +401,23 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 						if (pmt->length>8 && (pmt->list_management==4 || pmt->list_management==5) && pmt->program_number!=0 && pmt->program_info_length!=0) {
 							if (rbuffer[19]==0x04) {
 								pprintk(priv->ctx,"CAM: unassigned\n");
+								sl->pid = 0;
+								sl->pmt = 0;
+								sl->service = 0;
 								priv->ctx->scrambled_pid = 0;
 							}
 							if (rbuffer[19]==0x01) {
 								pprintk(priv->ctx, "CAM: assigned\n");
 								ptr = 20 + cpu_to_be16(pmt->program_info_length);
 								if (ptr+1<reqlen) {
-									priv->ctx->scrambled_pid = rbuffer[ptr]*256+rbuffer[ptr+1];
-									priv->ctx->scrambled_program = cpu_to_be16(pmt->program_number);
+									sl->pid = rbuffer[ptr]*256+rbuffer[ptr+1];
+									sl->service = cpu_to_be16(pmt->program_number);
+
+									priv->ctx->scrambled_pid = sl->pid;
+									priv->ctx->scrambled_program = sl->service;
+
 									pprintk(priv->ctx, "CAM: got pid %x (%i) - service id %x (%i)\n",
-											priv->ctx->scrambled_pid, priv->ctx->scrambled_pid,
-											priv->ctx->scrambled_program, priv->ctx->scrambled_program);
+											sl->pid, sl->pid, sl->service, sl->service);
 								}
 							}
 						}
@@ -456,8 +465,12 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 	priv->ctx->scrambled_pid=0;
 	priv->ctx->scrambled_pmt=0;
 	priv->ctx->scrambled_program=0;
-	sl->ca_session=false;
-	sl->ai_session=false;
+
+	sl->pid = 0;
+	sl->pmt = 0;
+	sl->service = 0;
+	sl->ca_session = false;
+	sl->ai_session = false;
 	do {
 		idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &pktlen);
 		if (idx!=-1) dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);

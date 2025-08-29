@@ -124,6 +124,10 @@ void dvb_proxyfe_set_stat(struct vtuner_dtv_fe_stats *vtuner_stats, struct dtv_f
 if (ctx->config) 			                        \
         pr_debug("vtunerc%d: " fmt, ctx->idx, ##arg);  \
 } while (0)
+#define pprintk_cont(ctx, fmt, arg...) do {                          \
+if (ctx->config)                                                \
+        pr_debug(KERN_CONT fmt, ##arg);  \
+} while (0)
 
 #define dprintk(ctx, fmt, arg...) do {				\
 if (ctx->config && (ctx->config->debug))			\

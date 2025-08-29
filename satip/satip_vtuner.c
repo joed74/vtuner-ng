@@ -244,6 +244,11 @@ static void set_pidlist(struct satip_vtuner* vt, struct vtuner_message* msg)
 	  DEBUG(MSG_NET,"%d\n",msg->body.pidlist[i]);
 	}
       }
+     else if (msg->body.pidlist[i] != 0xffff )
+      {
+	 DEBUG(MSG_NET,"got PMT: %i\n", msg->body.pidlist[i] & 0x1FFF);
+	 // TODO: ADD HERE SOMETHING?
+      }
 }
 
 void satip_vtuner_event(struct satip_vtuner* vt)

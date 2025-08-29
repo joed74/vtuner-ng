@@ -85,11 +85,11 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 	struct vtuner_message msg;
 	struct dvb_demux_feed *entry;
 	u16 stdpids[]={0,16,17,18,19,20};
-	int i,x;
+	int i,x,epmt;
 
 	if (retune) mutex_lock(&ctx->demux.mutex);
 
-	dprintk(ctx,"MSG_PIDLIST%s", retune ? " (DTV_TUNE)" : "");
+	pprintk(ctx,"MSG_PIDLIST%s", retune ? " (DTV_TUNE)" : "");
 
 	memset(&msg.body.pidlist,0xff,sizeof(msg.body.pidlist));
 	list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
@@ -101,7 +101,7 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 			if (entry->pid==18) stdpids[3]=PID_UNKNOWN;
 			if (entry->pid==19) stdpids[4]=PID_UNKNOWN;
 			if (entry->pid==20) stdpids[5]=PID_UNKNOWN;
-			dprintk_cont(ctx," r%i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
+			pprintk_cont(ctx," r%i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
 			if (retune && entry->state == DMX_STATE_GO) {
 				if (entry->type == DMX_TYPE_SEC) {
 					// stop running section feed
@@ -126,17 +126,25 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 		if (x>5) break;
 		if (msg.body.pidlist[i] == PID_UNKNOWN) {
 			msg.body.pidlist[i]=stdpids[x];
-			dprintk_cont(ctx, " %is", stdpids[x]);
+			pprintk_cont(ctx, " %is", stdpids[x]);
 			x++;
 		}
 	}
 
 	if (ctx->scrambled_pmt) {
 		// if we have an "scrambled" pmt, send it
-
+		epmt = 0xe000 | ctx->scrambled_pmt;
+		for (i=0; i<MAX_PIDTAB_LEN; i++) {
+			if (msg.body.pidlist[i] == epmt) break; // already on list
+			if (msg.body.pidlist[i] == PID_UNKNOWN) {
+				msg.body.pidlist[i] = epmt; // add to list
+				pprintk_cont(ctx, " %i(PMT)", ctx->scrambled_pmt);
+				break;
+			}
+		}
 	}
 
-	dprintk_cont(ctx, "\n");
+	pprintk_cont(ctx, "\n");
 
 	msg.type = MSG_PIDLIST;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
