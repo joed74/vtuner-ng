@@ -130,6 +130,12 @@ void send_pidlist(struct vtunerc_ctx *ctx, bool retune)
 			x++;
 		}
 	}
+
+	if (ctx->scrambled_pmt) {
+		// if we have an "scrambled" pmt, send it
+
+	}
+
 	dprintk_cont(ctx, "\n");
 
 	msg.type = MSG_PIDLIST;
@@ -509,7 +515,12 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			if (fep->delivery_system==SYS_DVBT || fep->delivery_system==SYS_DVBT2) {
 				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 			}
-			seq_printf(seq, " scrambled        : %s\n", ctx->scrambled_pid==0 ? "no" : "yes");
+			seq_printf(seq, " scrambled        : %s", ctx->scrambled_pid==0 ? "no" : "yes");
+			if (ctx->scrambled_pid) {
+				seq_printf(seq, " (PMT=%i)\n", ctx->scrambled_pmt);
+			} else {
+				seq_puts(seq, "\n");
+			}
 			seq_printf(seq, " pid tab          :");
 			mutex_lock(&ctx->demux.mutex);
 			list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {

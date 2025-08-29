@@ -405,7 +405,10 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 								ptr = 20 + cpu_to_be16(pmt->program_info_length);
 								if (ptr+1<reqlen) {
 									priv->ctx->scrambled_pid = rbuffer[ptr]*256+rbuffer[ptr+1];
-									pprintk(priv->ctx, "CAM: got pid %x (%i)\n", priv->ctx->scrambled_pid, priv->ctx->scrambled_pid);
+									priv->ctx->scrambled_program = cpu_to_be16(pmt->program_number);
+									pprintk(priv->ctx, "CAM: got pid %x (%i) - service id %x (%i)\n",
+											priv->ctx->scrambled_pid, priv->ctx->scrambled_pid,
+											priv->ctx->scrambled_program, priv->ctx->scrambled_program);
 								}
 							}
 						}
@@ -451,6 +454,8 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	priv->ctx->scrambled_pid=0;
+	priv->ctx->scrambled_pmt=0;
+	priv->ctx->scrambled_program=0;
 	sl->ca_session=false;
 	sl->ai_session=false;
 	do {

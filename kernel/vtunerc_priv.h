@@ -74,6 +74,8 @@ struct vtunerc_ctx {
 
 	u8 tune_id;
 	u16 scrambled_pid;
+	u16 scrambled_program;
+	u16 scrambled_pmt;
 
 	struct semaphore xchange_sem;
 	struct semaphore ioctl_sem;
