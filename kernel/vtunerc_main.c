@@ -50,7 +50,6 @@ static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 /* module params */
 static struct vtunerc_config config = {
 	.devices = 1,
-	.debug = 0,
 	.timeout = 0
 };
 
@@ -89,7 +88,7 @@ void send_pidlist(struct vtunerc_ctx *ctx, struct vtunerc_cainfo *ci, bool retun
 
 	if (retune) mutex_lock(&ctx->demux.mutex);
 
-	pprintk(ctx,"MSG_PIDLIST%s", retune ? " (DTV_TUNE)" : "");
+	dprintk(ctx,"MSG_PIDLIST%s", retune ? " (DTV_TUNE)" : "");
 
 	memset(&msg.body.pidlist,0xff,sizeof(msg.body.pidlist));
 	list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {
@@ -101,7 +100,7 @@ void send_pidlist(struct vtunerc_ctx *ctx, struct vtunerc_cainfo *ci, bool retun
 			if (entry->pid==18) stdpids[3]=PID_UNKNOWN;
 			if (entry->pid==19) stdpids[4]=PID_UNKNOWN;
 			if (entry->pid==20) stdpids[5]=PID_UNKNOWN;
-			pprintk_cont(ctx," r%i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
+			dprintk_cont(ctx," r%i%s", entry->pid, (entry->type == DMX_TYPE_SEC) ? "s" : "t");
 			if (retune && entry->state == DMX_STATE_GO) {
 				if (entry->type == DMX_TYPE_SEC) {
 					// stop running section feed
@@ -126,7 +125,7 @@ void send_pidlist(struct vtunerc_ctx *ctx, struct vtunerc_cainfo *ci, bool retun
 		if (x>5) break;
 		if (msg.body.pidlist[i] == PID_UNKNOWN) {
 			msg.body.pidlist[i]=stdpids[x];
-			pprintk_cont(ctx, " %is", stdpids[x]);
+			dprintk_cont(ctx, " %is", stdpids[x]);
 			x++;
 		}
 	}
@@ -138,13 +137,13 @@ void send_pidlist(struct vtunerc_ctx *ctx, struct vtunerc_cainfo *ci, bool retun
 			if (msg.body.pidlist[i] == epmt) break; // already on list
 			if (msg.body.pidlist[i] == PID_UNKNOWN) {
 				msg.body.pidlist[i] = epmt; // add to list
-				pprintk_cont(ctx, " %i(PMT)", ci->pmt);
+				dprintk_cont(ctx, " %i(PMT)", ci->pmt);
 				break;
 			}
 		}
 	}
 
-	pprintk_cont(ctx, "\n");
+	dprintk_cont(ctx, "\n");
 
 	msg.type = MSG_PIDLIST;
 	vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
@@ -791,16 +790,13 @@ static void __exit vtunerc_exit(void)
 module_init(vtunerc_init);
 module_exit(vtunerc_exit);
 
-MODULE_AUTHOR("Honza Petrous");
+MODULE_AUTHOR("Jochen Dolze, Honza Petrous");
 MODULE_DESCRIPTION("virtual DVB device");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(VTUNERC_MODULE_VERSION);
 
 module_param_named(devices, config.devices, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(devices, "Number of virtual adapters (default is 1)");
-
-module_param_named(debug, config.debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(debug, "Enable debug messages (default is 0)");
 
 module_param_named(timeout, config.timeout, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(timeout, "Timeout for closing frontends when only section streams are transmitted (default is 0 = disabled)");

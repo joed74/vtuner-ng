@@ -217,7 +217,7 @@ int vtunerc_ca_read_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addre
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	int myaddress=address/2;
-	pprintk(priv->ctx, "CAM %i: ca_read_attribute_mem address=%i myaddress=%i\n", slot, address, myaddress);
+	dprintk(priv->ctx, "CAM %i: ca_read_attribute_mem address=%i -> %i\n", slot, address, myaddress);
 	if (myaddress<0) return 0xFF;
 	if (myaddress>=sizeof(sl->tuple_mem)) return 0xFF;
 	return sl->tuple_mem[myaddress];
@@ -229,7 +229,7 @@ int vtunerc_ca_write_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addr
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	int myaddress=address/2;
-	pprintk(priv->ctx, "CAM %i: ca_write_attribute_mem address=%i value=%i\n", slot, address, value);
+	dprintk(priv->ctx, "CAM %i: ca_write_attribute_mem address=%i -> %i value=%i\n", slot, address, myaddress, value);
 	if (myaddress<0) return -EIO;
 	if (myaddress>=sizeof(sl->tuple_mem)) return 0xFF;
 	sl->tuple_mem[myaddress]=value;
@@ -241,7 +241,7 @@ int vtunerc_ca_read_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address)
 	struct vtunerc_ca_private *priv = ca->data;
 	struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
-	pprintk(priv->ctx, "CAM %i: ca_read_cam_control address=%i\n", slot, address);
+	dprintk(priv->ctx, "CAM %i: ca_read_cam_control address=%i\n", slot, address);
 	if (address==CTRLIF_STATUS) return sl->nextstatus;
 	if (address==CTRLIF_SIZE_HIGH) return 0;
 	if (address==CTRLIF_SIZE_LOW) return 2; // 2 bytes
@@ -254,7 +254,7 @@ int vtunerc_ca_write_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
-	pprintk(priv->ctx, "CAM %i: ca_write_cam_control address=%i value=%i\n",slot, address, value);
+	dprintk(priv->ctx, "CAM %i: ca_write_cam_control address=%i value=%i\n",slot, address, value);
 	if (address==CTRLIF_COMMAND) {
 	    if (value == (IRQEN|CMDREG_SR)) sl->nextstatus=STATUSREG_DA;
 	    if (value == (IRQEN|CMDREG_SW)) sl->nextstatus=STATUSREG_FR;
@@ -368,17 +368,17 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 	ecount=0;
 	tpdu = (void *) rbuffer; // last request data received
 	if (tpdu->tag==T_CREATE_TC) {
-		pprintk(priv->ctx, "CAM %i: create tc\n", slot);
+		dprintk(priv->ctx, "CAM %i: create tc\n", slot);
 		ecount=vtunerc_ca_send_ctc_reply(ebuf, tpdu->slot, tpdu->tcid);
 	} else if (tpdu->tag==T_DATA_LAST) {
 		// now answer some requests
 		if (reqlen<=6) {
 			if (sl->ai_session && !sl->ca_session) {
-				pprintk(priv->ctx,"CAM %i: create ca support session\n", slot);
+				dprintk(priv->ctx,"CAM %i: create ca support session\n", slot);
 			       	ecount=vtunerc_ca_send_session_request(ebuf, tpdu->slot, tpdu->tcid, RI_CONDITIONAL_ACCESS_SUPPORT);
 				sl->ca_session=true;
 			} else if (!sl->ai_session) {
-				pprintk(priv->ctx,"CAM %i: create app info session\n", slot);
+				dprintk(priv->ctx,"CAM %i: create app info session\n", slot);
 				ecount=vtunerc_ca_send_session_request(ebuf, tpdu->slot, tpdu->tcid, RI_APPLICATION_INFORMATION);
 				sl->ai_session=true;
 			} else {
@@ -390,37 +390,38 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 				int aot = spdu->aot0<<16 | spdu->aot1<<8 | spdu->aot2;
 				switch (aot) {
 					case AOT_CA_INFO_ENQ:
-						pprintk(priv->ctx,"CAM %i: answer ca_info_enq\n", slot);
+						dprintk(priv->ctx,"CAM %i: answer ca_info_enq\n", slot);
 						ecount=vtunerc_ca_send_ca_info(ebuf, (u8*) &rbuffer);
 						break;
 					case AOT_CA_PMT:
 						pmt = (void *) &rbuffer[12];
-						//pprintk(priv->ctx,"CAM %i: list_management=%i program-number=%i pil=%i\n", slot, pmt->list_management, pmt->program_number, cpu_to_be16(pmt->program_info_length));
+						//dprintk(priv->ctx,"CAM %i: list_management=%i program-number=%i pil=%i\n", slot, pmt->list_management, pmt->program_number, cpu_to_be16(pmt->program_info_length));
 						if (pmt->length>8 && (pmt->list_management==4 || pmt->list_management==5) && pmt->program_number!=0 && pmt->program_info_length!=0) {
 							if (rbuffer[19]==0x04) {
-								pprintk(priv->ctx,"CAM %i: unassigned\n", slot);
+								dprintk(priv->ctx,"CAM %i: unassigned service id %x (%i)\n", slot, 
+										sl->info.service, sl->info.service);
 								sl->info.pid = 0;
 								sl->info.pmt = 0;
 								sl->info.service = 0;
 							}
 							if (rbuffer[19]==0x01) {
-								pprintk(priv->ctx, "CAM %i: assigned\n", slot);
+								dprintk(priv->ctx, "CAM %i: assigned\n", slot);
 								ptr = 20 + cpu_to_be16(pmt->program_info_length);
 								if (ptr+1<reqlen) {
 									sl->info.pid = rbuffer[ptr]*256+rbuffer[ptr+1];
 									sl->info.service = cpu_to_be16(pmt->program_number);
 									sl->info.pmt = 0;
-									pprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
+									dprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
 											slot, sl->info.pid, sl->info.pid, sl->info.service, 
 											sl->info.service);
 								}
 							}
 						}
-						pprintk(priv->ctx,"CAM %i: answer ca_pmt\n", slot);
+						dprintk(priv->ctx,"CAM %i: answer ca_pmt\n", slot);
 						ecount=vtunerc_ca_send_pmt_reply(ebuf, (u8*) &rbuffer);
 						break;
 					case AOT_APPLICATION_INFO_ENQ:
-						pprintk(priv->ctx,"CAM %i: answer app_info_enq\n", slot);
+						dprintk(priv->ctx,"CAM %i: answer app_info_enq\n", slot);
 						ecount=vtunerc_ca_send_app_info(ebuf, (u8*) &rbuffer);
 						break;
 				}
@@ -472,7 +473,6 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 
 int vtunerc_ca_slot_ts_enable(struct dvb_ca_en50221 *ca, int slot)
 {
-	// return code not evaluated
 	return 0;
 }
 
