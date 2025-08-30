@@ -42,6 +42,10 @@
 struct vtunerc_config {
 	int timeout;
 	int devices;
+	ushort caids0[10];
+	ushort caids1[10];
+	ushort sids0[10];
+	ushort sids1[10];
 };
 
 struct vtunerc_feedinfo {
@@ -112,7 +116,7 @@ void vtunerc_unregister_ctrldev(struct vtunerc_config *config);
 struct vtunerc_ctx *vtunerc_get_ctx(int minor);
 int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
-int vtunerc_ca_init(struct vtunerc_ctx *ctx, int slot_count);
+int vtunerc_ca_init(struct vtunerc_ctx *ctx);
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx);
 struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int service);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);

@@ -50,7 +50,11 @@ static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 /* module params */
 static struct vtunerc_config config = {
 	.devices = 1,
-	.timeout = 0
+	.timeout = 0,
+	.caids0 = {},
+	.caids1 = {},
+	.sids0 = {},
+	.sids1 = {}
 };
 
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
@@ -694,7 +698,7 @@ static int __init vtunerc_init(void)
 			goto err_remove_mem_frontend;
 
 		vtunerc_frontend_init(ctx);
-		vtunerc_ca_init(ctx, 1);
+		vtunerc_ca_init(ctx);
 
 		sema_init(&ctx->xchange_sem, 1);
 		sema_init(&ctx->ioctl_sem, 1);
@@ -775,7 +779,7 @@ static void __exit vtunerc_exit(void)
 		// free allocated buffer
 		if(ctx->kernel_buf != NULL) {
 			kfree(ctx->kernel_buf);
-			printk(KERN_INFO "vtunerc%d: deallocated buffer of %zu bytes\n", idx, ctx->kernel_buf_size);
+			dprintk(ctx, "deallocated buffer of %zu bytes\n", ctx->kernel_buf_size);
 			ctx->kernel_buf = NULL;
 			ctx->kernel_buf_size = 0;
 
@@ -786,6 +790,25 @@ static void __exit vtunerc_exit(void)
 
 	printk(KERN_NOTICE "vtunerc: unloaded successfully\n");
 }
+
+// Set hexadecimal parameter
+int param_set_hex(const char *val, const struct kernel_param *kp)
+{
+    return kstrtou16(val, 16, (unsigned short*)kp->arg);
+}
+// Read hexadecimal parameter
+int param_get_hex(char *buffer, const struct kernel_param *kp)
+{
+    return scnprintf(buffer, PAGE_SIZE, "%lx", *((unsigned long*)kp->arg));
+}
+
+// Combine operations together
+const struct kernel_param_ops param_ops_hex = {
+    .set = param_set_hex,
+    .get = param_get_hex
+};
+
+#define param_check_hex(name, p) __param_check(name, p, unsigned short)
 
 module_init(vtunerc_init);
 module_exit(vtunerc_exit);
@@ -800,3 +823,15 @@ MODULE_PARM_DESC(devices, "Number of virtual adapters (default is 1)");
 
 module_param_named(timeout, config.timeout, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(timeout, "Timeout for closing frontends when only section streams are transmitted (default is 0 = disabled)");
+
+module_param_array_named(caids0, config.caids0, hex, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(caids0, "CAIDs of emulated CAM0 (default empty = disabled)");
+
+module_param_array_named(caids1, config.caids1, hex, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(caids1, "CAIDs of emulated CAM1 (default empty = disabled)");
+
+module_param_array_named(sids0, config.sids0, ushort, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(sids0, "ServiceIds of emulated CAM0 (default empty = all)");
+
+module_param_array_named(sids1, config.sids1, ushort, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(sids1, "ServiceIds of emulated CAM1 (default empty = all)");

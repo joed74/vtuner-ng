@@ -233,7 +233,7 @@ static int dvb_proxyfe_ts_bus_ctrl(struct dvb_frontend *fe, int aquire)
 	ctx->adapter_inuse=aquire;
 	if (aquire==0 && ctx->fe_params.frequency) {
 		ctx->status = FE_NONE;
-		printk(KERN_INFO "vtunerc%d: sending MSG_CLOSE_FRONTEND\n", ctx->idx);
+		printk(KERN_INFO "vtunerc%d: sending close frontend\n", ctx->idx);
 		memset(&msg, 0, sizeof(msg));
 		msg.type = MSG_CLOSE_FRONTEND;
 		vtunerc_ctrldev_xchange_message(ctx, &msg, 1);

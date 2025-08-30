@@ -71,7 +71,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 			return -ENOMEM;
 		}
 		ctx->kernel_buf_size = len;
-		printk(KERN_INFO "vtunerc%d: allocated buffer of %zu bytes\n", ctx->idx, len);
+		dprintk(ctx,"allocated buffer of %zu bytes\n", len);
 	}
 
 	if (copy_from_user(ctx->kernel_buf, buff, len)) {
@@ -447,7 +447,7 @@ int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx)
 
 		clsdev = device_create(pclass, NULL, MKDEV(VTUNERC_CTRLDEV_MAJOR, idx), /*ctx*/ NULL, "vtunerc%d", idx);
 
-		printk(KERN_NOTICE "vtunerc: registered /dev/vtunerc%d\n", idx);
+		printk(KERN_NOTICE "vtunerc%d: registered /dev/vtunerc%d\n", idx, idx);
 	}
 
 	return 0;
@@ -457,12 +457,12 @@ void vtunerc_unregister_ctrldev(struct vtunerc_config *config)
 {
 	int idx;
 
-	printk(KERN_NOTICE "vtunerc: unregistering\n");
-
 	unregister_chrdev_region(chdev, config->devices);
 
-	for (idx = 0; idx < config->devices; idx++)
+	for (idx = 0; idx < config->devices; idx++) {
+		printk(KERN_NOTICE "vtunerc%d: unregistering /dev/vtunerc%d\n", idx, idx);
 		device_destroy(pclass, MKDEV(VTUNERC_CTRLDEV_MAJOR, idx));
+	}
 
 	cdev_del(&cdev);
 
