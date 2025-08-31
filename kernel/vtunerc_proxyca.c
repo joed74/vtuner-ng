@@ -556,7 +556,11 @@ int vtunerc_ca_remove(struct vtunerc_ctx *ctx, int slot)
 struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int service)
 {
 	int i;
-	struct vtunerc_ca_private *priv = ctx->pubca.data;
+	struct vtunerc_ca_private *priv;
+	if (!ctx) return NULL;
+	if (!ctx->pubca.data) return NULL;
+
+	priv = ctx->pubca.data;
 	for (i=0; i< priv->slot_count; i++) {
 		struct vtunerc_ca_slot *sl = &priv->slot_info[i];
 		if (pid!=0 && service!=0) {
