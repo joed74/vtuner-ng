@@ -412,9 +412,12 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 	struct vtunerc_pmt *pmt;
 	u8 rbuffer[256];
 	int ptr;
-
 	size_t reqlen;
-	ssize_t idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &reqlen);
+	ssize_t idx;
+
+	if (!sl->rbuf.data) return -EIO;
+
+	idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &reqlen);
 	if (idx==-1) return 0;
 	dvb_ringbuffer_pkt_read(&sl->rbuf, idx, 0, (u8*) &rbuffer, reqlen);
 	dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);
@@ -502,6 +505,8 @@ static int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, 
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
 	if (ecount>255) return -EINVAL;
+	if (!sl->rbuf.data) return -EIO;
+
 	dvb_ringbuffer_pkt_write(&sl->rbuf, ebuf, ecount);
 	if (ebuf[2]==T_DATA_LAST && ebuf[3]==1) return ecount;
 	print_hex_dump_bytes("ca_write_data ", DUMP_PREFIX_NONE, ebuf, ecount);
@@ -528,10 +533,12 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 	sl->can_decrypt = false;
 	sl->ca_session = false;
 	sl->ai_session = false;
-	do {
-		idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &pktlen);
-		if (idx!=-1) dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);
-	} while (idx!=-1);
+	if (sl->rbuf.data) {
+		do {
+			idx=dvb_ringbuffer_pkt_next(&sl->rbuf, -1, &pktlen);
+			if (idx!=-1) dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);
+		} while (idx!=-1);
+	}
 	sl->nextstatus=STATUSREG_DA|STATUSREG_FR;
 	return 0;
 }
@@ -582,6 +589,7 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 	bool enable0=false;
 	bool enable1=false;
 	struct vtunerc_ca_private *ca = NULL;
+	struct vtunerc_ca_slot *sl;
 	void *buf;
 
 	for (i=0; i<sizeof(ctx->config->caids0)/2; i++)
@@ -625,13 +633,13 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 
 	/* now initialize each slot */
 	for (i=0; i< slot_count; i++) {
-		struct vtunerc_ca_slot *sl = &ca->slot_info[i];
+		sl = &ca->slot_info[i];
 		sl->nextstatus=0xC0;
 		sl->info.slot=i;
 		memcpy(sl->tuple_mem,&tuple_mem,sizeof(tuple_mem));
 		buf = vmalloc(BUFFER_SIZE);
-		// TODO: what to do if buf is null?
-		dvb_ringbuffer_init(&sl->rbuf, buf, BUFFER_SIZE);
+		if (!buf) printk(KERN_ERR "vtunerc%d: failed to allocated ringbuffer, cam slot %i disabled\n", ctx->idx, i);
+		if (buf) dvb_ringbuffer_init(&sl->rbuf, buf, BUFFER_SIZE);
 	}
 	ctx->pubca.data = ca;
 
@@ -646,13 +654,14 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 	ctx->pubca.slot_shutdown = vtunerc_ca_slot_shutdown;
 	ctx->pubca.slot_ts_enable = vtunerc_ca_slot_ts_enable;
 	ret = dvb_ca_en50221_init(&ctx->dvb_adapter, &ctx->pubca,
-			DVB_CA_EN50221_FLAG_IRQ_CAMCHANGE | 
-			DVB_CA_EN50221_FLAG_IRQ_FR | 
+			DVB_CA_EN50221_FLAG_IRQ_CAMCHANGE |
+			DVB_CA_EN50221_FLAG_IRQ_FR |
 			DVB_CA_EN50221_FLAG_IRQ_DA, slot_count);
 
 	for (i=0; i < slot_count; i++) {
+		sl = &ca->slot_info[i];
 		dvb_ca_en50221_frda_irq(&ctx->pubca, i); // enable "irq"
-		vtunerc_ca_insert(ctx, i);
+		if (sl->rbuf.data) vtunerc_ca_insert(ctx, i);
 	}
 	return ret;
 }
