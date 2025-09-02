@@ -101,7 +101,6 @@ struct vtunerc_tpdu {
 };
 
 struct vtunerc_spdu {
-	u8 length;
 	u8 tcid;
 	u8 tag;
 	u8 field_length;
@@ -112,7 +111,6 @@ struct vtunerc_spdu {
 } __attribute__ ((packed));
 
 struct vtunerc_pmt {
-	u8 length;
 	u8 list_management;
 	u16 program_number;
 	u8 version_next_indicator;
@@ -410,7 +408,7 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 	struct vtunerc_tpdu *tpdu;
 	struct vtunerc_spdu *spdu;
 	struct vtunerc_pmt *pmt;
-	u8 rbuffer[256];
+	u8 rbuffer[256], length_field, length_field_p;
 	int ptr;
 	size_t reqlen;
 	ssize_t idx;
@@ -421,8 +419,6 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 	if (idx==-1) return 0;
 	dvb_ringbuffer_pkt_read(&sl->rbuf, idx, 0, (u8*) &rbuffer, reqlen);
 	dvb_ringbuffer_pkt_dispose(&sl->rbuf, idx);
-
-	//print_hex_dump_bytes("ca_read_data< ", DUMP_PREFIX_NONE, rbuffer, reqlen);
 
 	ecount=0;
 	tpdu = (void *) rbuffer; // last request data received
@@ -444,44 +440,75 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 				ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
 			}
 		} else {
-			spdu = (void *) &rbuffer[3];
+			length_field = rbuffer[3];
+			if ((length_field & 0x80) == 0x80) {
+				length_field &= 0x7f;
+				spdu = (void *) &rbuffer[4+length_field];
+				dprintk(priv->ctx,"CAM %i: super long field %i start @%i\n", slot, length_field, 4+length_field);
+			} else {
+				length_field = 0;
+				spdu = (void *) &rbuffer[4];
+			}
 			if (spdu->tag == ST_SESSION_NUMBER) {
 				int aot = spdu->aot0<<16 | spdu->aot1<<8 | spdu->aot2;
 				switch (aot) {
 					case AOT_CA_INFO_ENQ:
 						dprintk(priv->ctx,"CAM %i: answer ca_info_enq\n", slot);
 						ecount=vtunerc_ca_send_ca_info(slot, ebuf, (u8*) &rbuffer, priv->ctx->config);
-						dprintk(priv->ctx,"CAM %i: ECOUNT=%i\n", slot, ecount);
 						if (ecount<=13) sl->can_decrypt=false; else sl->can_decrypt=true;
 						break;
 					case AOT_CA_PMT:
-						pmt = (void *) &rbuffer[12];
+						length_field_p = rbuffer[12+length_field];
+						if ((length_field_p & 0x80) == 0x80) {
+							length_field_p &= 0x7f;
+							pmt = (void *) &rbuffer[13+length_field+length_field_p];
+						} else {
+							length_field_p = 0;
+							pmt = (void *) &rbuffer[13+length_field];
+						}
 						//dprintk(priv->ctx,"CAM %i: list_management=%i program-number=%i pil=%i cmd=%i\n", slot, pmt->list_management, cpu_to_be16(pmt->program_number), cpu_to_be16(pmt->program_info_length), pmt->ca_pmt_cmd_id);
-						if (pmt->length>=7 && (pmt->list_management>=3 && pmt->list_management<=5) && pmt->program_info_length!=0) {
-							if (rbuffer[19]==0x04) {
-								dprintk(priv->ctx,"CAM %i: unassigned service id %x (%i)\n", slot, 
-										sl->info.service, sl->info.service);
-								sl->info.pid = 0;
-								sl->info.pmt = 0;
-								sl->info.service = 0;
-								ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
-							}
-							if (rbuffer[19]==0x01) {
-								dprintk(priv->ctx, "CAM %i: assigned\n", slot);
-								ptr = 20 + cpu_to_be16(pmt->program_info_length);
-								if (ptr+1<reqlen) {
-									sl->info.pid = rbuffer[ptr]*256+rbuffer[ptr+1];
-									sl->info.service = cpu_to_be16(pmt->program_number);
+						if (pmt->list_management>=3 && pmt->list_management<=5) {
+							if (pmt->program_info_length!=0) {
+								if (rbuffer[19+length_field+length_field_p]==0x04) {
+									dprintk(priv->ctx,"CAM %i: unassigned service id %x (%i)\n", slot,
+											sl->info.service, sl->info.service);
+									sl->info.pid = 0;
 									sl->info.pmt = 0;
-									dprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
-											slot, sl->info.pid, sl->info.pid, sl->info.service, 
-											sl->info.service);
+									sl->info.service = 0;
+									ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
 								}
-								ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
-							}
-							if (rbuffer[19]==0x03) {
-								dprintk(priv->ctx, "CAM %i: answer ca_pmt\n", slot);
-								ecount=vtunerc_ca_send_pmt_reply(slot, ebuf, (u8 *) &rbuffer, sl->can_decrypt, priv->ctx->config);
+								if (rbuffer[19+length_field+length_field_p]==0x01) {
+									dprintk(priv->ctx, "CAM %i: assigned\n", slot);
+									ptr = 20+length_field+length_field_p + cpu_to_be16(pmt->program_info_length);
+									if (ptr+1<reqlen) {
+										sl->info.pid = rbuffer[ptr]*256+rbuffer[ptr+1];
+										sl->info.service = cpu_to_be16(pmt->program_number);
+										sl->info.pmt = 0;
+										dprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
+												slot, sl->info.pid, sl->info.pid, sl->info.service,
+												sl->info.service);
+									}
+									ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
+								}
+								if (rbuffer[19+length_field+length_field_p]==0x03) {
+									dprintk(priv->ctx, "CAM %i: answer ca_pmt %s\n", slot, sl->can_decrypt ? "true" : "false");
+									ecount=vtunerc_ca_send_pmt_reply(slot, ebuf, (u8 *) &rbuffer, sl->can_decrypt, priv->ctx->config);
+								}
+							} else {
+								if (pmt->list_management==0x04 && pmt->program_number) {
+
+									dprintk(priv->ctx, "CAM %i: assigned\n", slot);
+									ptr = 20+length_field+length_field_p;
+									if (ptr+1<reqlen) {
+                                                                                sl->info.pid = rbuffer[ptr]*256+rbuffer[ptr+1];
+                                                                                sl->info.service = cpu_to_be16(pmt->program_number);
+                                                                                sl->info.pmt = 0;
+                                                                                dprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
+                                                                                                slot, sl->info.pid, sl->info.pid, sl->info.service,
+                                                                                                sl->info.service);
+                                                                        }
+                                                                        ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
+								}
 							}
 						} else {
 							ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
@@ -504,7 +531,7 @@ static int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, 
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
 
-	if (ecount>255) return -EINVAL;
+	if (ecount>(BUFFER_SIZE/8)) return -EINVAL;
 	if (!sl->rbuf.data) return -EIO;
 
 	dvb_ringbuffer_pkt_write(&sl->rbuf, ebuf, ecount);

@@ -127,10 +127,10 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 					if (ctx->demux.feed[idx].type == DMX_TYPE_TS)
 					{
 						if (pusi && (!ctx->demux.feed[idx].pusi_seen || fi->id == -2)) {
-							dprintk(ctx,"found pusi for pid %it\n", pid);
 							sendfiller = 0;
 							// PES
 							if (offs>0 && offs<182 && (ctx->kernel_buf[i+offs]==0) && (ctx->kernel_buf[i+offs+1]==0) && (ctx->kernel_buf[i+offs+2]==1)) {
+								dprintk(ctx,"found pusi for pid %it\n", pid);
 								fi->id = ctx->kernel_buf[i+offs+3];
 								if (fi->id == 0xbd) {
 									pesh=0;
