@@ -54,10 +54,12 @@ struct vtunerc_feedinfo {
 };
 
 struct vtunerc_cainfo {
-	int slot;
-	int service;
-	int pmt;
-	int pid;
+	u8 slot;
+	u16 service;
+	u16 service_last;
+	u16 pmt;
+	u16 pmt_last;
+	u16 pid;
 };
 
 struct vtunerc_ctx {
@@ -119,6 +121,7 @@ int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ca_init(struct vtunerc_ctx *ctx);
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx);
 struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int service);
+struct vtunerc_cainfo *vtunerc_ca_get(struct vtunerc_ctx *ctx, int slot);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid);
 bool feedtab_only_secpids(struct vtunerc_ctx *ctx);

@@ -173,7 +173,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t
 										ts+=4;
 									} while (service!=0xffff);
 									if (service!=0xffff) {
-										dprintk(ctx,"CAM %i: found %i as PMT pid for %i\n", ci->slot, ci->pmt, ci->service);
+										printk(KERN_INFO "vtunerc%d: CAM %i: found %i as PMT pid for %i\n", ctx->idx, ci->slot, ci->pmt, ci->service);
 										send_pidlist(ctx, ci, false);
 									}
 								}

@@ -493,8 +493,9 @@ static void sectiontable2str(struct seq_file *seq, int id)
 
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
-	int pcnt = 0;
+	int pcnt = 0, slot;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
+	struct vtunerc_cainfo *ca;
 	struct vtunerc_feedinfo *fi;
 	struct dvb_demux_feed *entry;
 	struct fe_params *fep;
@@ -526,14 +527,23 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 			if (fep->delivery_system==SYS_DVBT || fep->delivery_system==SYS_DVBT2) {
 				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 			}
-			/*
-			seq_printf(seq, " scrambled        : %s", ctx->scrambled_pid==0 ? "no" : "yes");
-			if (ctx->scrambled_pid) {
-				seq_printf(seq, " (PMT=%i)\n", ctx->scrambled_pmt);
-			} else {
-				seq_puts(seq, "\n");
+			if (ctx->pubca.data) {
+				for (slot=0; slot<2; slot++) {
+					ca = vtunerc_ca_get(ctx, slot);
+					if (ca) {
+						if (ca->service)
+							seq_printf(seq, " cam #%i           : %i-SID %i-PID %i-PMT\n", slot, ca->service, ca->pid, ca->pmt);
+						else
+							seq_printf(seq, " cam #%i           : unused\n", slot);
+					}
+					else
+						seq_printf(seq, " cam #%i           : disabled\n", slot);
+				}
 			}
-			*/
+			else
+			{
+				seq_printf(seq, " cams             : disabled\n");
+			}
 			seq_printf(seq, " pid tab          :");
 			mutex_lock(&ctx->demux.mutex);
 			list_for_each_entry(entry, &ctx->demux.feed_list, list_head) {

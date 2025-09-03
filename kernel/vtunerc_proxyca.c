@@ -444,7 +444,6 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 			if ((length_field & 0x80) == 0x80) {
 				length_field &= 0x7f;
 				spdu = (void *) &rbuffer[4+length_field];
-				dprintk(priv->ctx,"CAM %i: super long field %i start @%i\n", slot, length_field, 4+length_field);
 			} else {
 				length_field = 0;
 				spdu = (void *) &rbuffer[4];
@@ -470,23 +469,27 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 						if (pmt->list_management>=3 && pmt->list_management<=5) {
 							if (pmt->program_info_length!=0) {
 								if (rbuffer[19+length_field+length_field_p]==0x04) {
-									dprintk(priv->ctx,"CAM %i: unassigned service id %x (%i)\n", slot,
+									printk(KERN_INFO "vtunerc%d: CAM %i: unassigned service id %x (%i)\n", priv->ctx->idx, slot,
 											sl->info.service, sl->info.service);
+									sl->info.service_last = sl->info.service;
+									sl->info.pmt_last = sl->info.pmt;
 									sl->info.pid = 0;
 									sl->info.pmt = 0;
 									sl->info.service = 0;
 									ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
 								}
 								if (rbuffer[19+length_field+length_field_p]==0x01) {
-									dprintk(priv->ctx, "CAM %i: assigned\n", slot);
-									ptr = 20+length_field+length_field_p + cpu_to_be16(pmt->program_info_length);
+									ptr = 20+length_field+length_field_p+cpu_to_be16(pmt->program_info_length);
 									if (ptr+1<reqlen) {
 										sl->info.pid = rbuffer[ptr]*256+rbuffer[ptr+1];
 										sl->info.service = cpu_to_be16(pmt->program_number);
-										sl->info.pmt = 0;
-										dprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
-												slot, sl->info.pid, sl->info.pid, sl->info.service,
-												sl->info.service);
+										if (sl->info.service == sl->info.service_last)
+											sl->info.pmt = sl->info.pmt_last;
+										else
+											sl->info.pmt = 0;
+										printk(KERN_INFO "vtunerc%d: CAM %i: assigned service id %x (%i) - pid %x (%i)\n",
+												priv->ctx->idx, slot, sl->info.service, sl->info.service,
+												sl->info.pid, sl->info.pid);
 									}
 									ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
 								}
@@ -496,16 +499,17 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 								}
 							} else {
 								if (pmt->list_management==0x04 && pmt->program_number) {
-
-									dprintk(priv->ctx, "CAM %i: assigned\n", slot);
 									ptr = 20+length_field+length_field_p;
 									if (ptr+1<reqlen) {
                                                                                 sl->info.pid = rbuffer[ptr]*256+rbuffer[ptr+1];
                                                                                 sl->info.service = cpu_to_be16(pmt->program_number);
-                                                                                sl->info.pmt = 0;
-                                                                                dprintk(priv->ctx, "CAM %i: got pid %x (%i) - service id %x (%i)\n",
-                                                                                                slot, sl->info.pid, sl->info.pid, sl->info.service,
-                                                                                                sl->info.service);
+										if (sl->info.service == sl->info.service_last)
+											sl->info.pmt = sl->info.pmt_last;
+										else
+											sl->info.pmt = 0;
+                                                                                printk(KERN_INFO "vtunerc%d: CAM %i: assigned service id %x (%i) - pid %x (%i)\n",
+                                                                                                priv->ctx->idx, slot, sl->info.service, sl->info.service,
+												sl->info.pid, sl->info.pid);
                                                                         }
                                                                         ecount=vtunerc_ca_send_sb_reply(ebuf, tpdu->slot, tpdu->tcid);
 								}
@@ -556,7 +560,9 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 
 	sl->info.pid = 0;
 	sl->info.pmt = 0;
+	sl->info.pmt_last = 0;
 	sl->info.service = 0;
+	sl->info.service_last = 0;
 	sl->can_decrypt = false;
 	sl->ca_session = false;
 	sl->ai_session = false;
@@ -604,6 +610,21 @@ struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int ser
 		} else if (service!=0) {
 			if (sl->info.service==service) return &sl->info;
 		}
+	}
+	return NULL;
+}
+
+struct vtunerc_cainfo *vtunerc_ca_get(struct vtunerc_ctx *ctx, int slot)
+{
+	int i;
+        struct vtunerc_ca_private *priv;
+        if (!ctx) return NULL;
+        if (!ctx->pubca.data) return NULL;
+
+        priv = ctx->pubca.data;
+        for (i=0; i< priv->slot_count; i++) {
+		struct vtunerc_ca_slot *sl = &priv->slot_info[i];
+		if (sl->info.slot==slot) return &sl->info;
 	}
 	return NULL;
 }
