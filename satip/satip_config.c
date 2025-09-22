@@ -465,4 +465,79 @@ void satip_clear_config(t_satip_config* cfg)
 
   for ( i=0; i<SATIPCFG_MAX_PIDS; i++)
     cfg->mod_pid[i]=PID_IGNORE;
+
+  /* Initialize PMT and CI slot */
+  satip_clear_pmt(cfg);
+  cfg->ci_slot = 0; /* 0 means no CI slot selected */
 }
+
+int satip_add_pmt(t_satip_config* cfg, unsigned short pmt_pid)
+{
+  int i;
+
+  /* Check if PMT is already in the list */
+  for (i = 0; i < cfg->pmt_count; i++) {
+    if (cfg->pmt_pids[i] == pmt_pid) {
+      return SATIPCFG_NOCHANGE;
+    }
+  }
+
+  /* Add the PMT if there's room */
+  if (cfg->pmt_count < SATIPCFG_MAX_PIDS) {
+    cfg->pmt_pids[cfg->pmt_count++] = pmt_pid;
+    DEBUG(MSG_MAIN, "Added PMT PID: %d\n", pmt_pid);
+    return SATIPCFG_OK;
+  }
+
+  return SATIPCFG_ERROR;
+}
+
+void satip_clear_pmt(t_satip_config* cfg)
+{
+  cfg->pmt_count = 0;
+  DEBUG(MSG_MAIN, "Cleared PMT PIDs\n");
+}
+
+int satip_set_ci_slot(t_satip_config* cfg, int slot)
+{
+  if (slot >= 0) {
+    cfg->ci_slot = slot;
+    DEBUG(MSG_MAIN, "Set CI slot: %d\n", slot);
+    return SATIPCFG_OK;
+  }
+  return SATIPCFG_ERROR;
+}
+
+int satip_prepare_pmt_ci(t_satip_config* cfg, char* str, int maxlen)
+{
+  int printed = 0;
+  int i;
+
+  /* Add x_pmt parameter if we have PMT PIDs */
+  if (cfg->pmt_count > 0) {
+    printed = snprintf(str, maxlen, "&x_pmt=");
+
+    for (i = 0; i < cfg->pmt_count; i++) {
+      int len;
+      if (i > 0) {
+        len = snprintf(str + printed, maxlen - printed, ",");
+        if (len >= maxlen - printed) return printed;
+        printed += len;
+      }
+
+      len = snprintf(str + printed, maxlen - printed, "%d", cfg->pmt_pids[i]);
+      if (len >= maxlen - printed) return printed;
+      printed += len;
+    }
+  }
+
+  /* Add x_ci parameter if a CI slot is selected */
+  if (cfg->ci_slot > 0) {
+    int len = snprintf(str + printed, maxlen - printed, "&x_ci=%d", cfg->ci_slot);
+    if (len >= maxlen - printed) return printed;
+    printed += len;
+  }
+
+  return printed;
+}
+

@@ -73,13 +73,13 @@ typedef struct satip_rtsp {
 
   struct polltimer** timer_queue;
   struct polltimer* timer;
-  
+
   t_rtsp_request request;
   int cseq;
   int streamid;
   char session[MAX_SESSION];
   int timeout;
-  
+
   char txbuf[MAX_BUF];
 
   char rxbuf[MAX_BUF];
@@ -119,7 +119,7 @@ static void reset_connection(t_satip_rtsp* rtsp)
   rtsp->request = RTSP_REQ_NONE;
   rtsp->timeout = 30;
   rtsp->session[0] = 0;
-  
+
   rtsp->txbuf[0]=0;
 
   rtsp->rxbuf_pos=0;
@@ -145,31 +145,31 @@ static void timeout_reconnect(void* param)
   t_satip_rtsp* rtsp=(t_satip_rtsp*)param;
 
   DEBUG(MSG_NET,"timeout\n");
-  
+
   /* timer expired, clear it */
   rtsp->timer = NULL;
 
-  send_teardown(rtsp);  
-  restart_connection(rtsp,1);  
+  send_teardown(rtsp);
+  restart_connection(rtsp,1);
 }
 
 
 
 
 
-t_satip_rtsp* satip_rtsp_new(t_satip_config* satip_config, 
+t_satip_rtsp* satip_rtsp_new(t_satip_config* satip_config,
 			     struct polltimer** timer_queue,
-			     const char* host, 
+			     const char* host,
 			     const char* port,
 			     t_satip_rtp* satip_rtp)
 {
-  t_satip_rtsp* rtsp; 
+  t_satip_rtsp* rtsp;
 
   rtsp=(t_satip_rtsp*)malloc(sizeof(t_satip_rtsp));
 
   rtsp->host=strdup(host);
   rtsp->port=strdup(port);
- 
+
   rtsp->satip_config= satip_config;
   rtsp->timer_queue = timer_queue;
 
@@ -188,7 +188,7 @@ t_satip_rtsp* satip_rtsp_new(t_satip_config* satip_config,
 static void restart_connection(t_satip_rtsp* rtsp,int now)
 {
   reset_connection(rtsp);
-  
+
   if ( now )
     {
       satip_rtsp_check_update(rtsp, 0);
@@ -209,7 +209,7 @@ static int read_response(t_satip_rtsp* rtsp)
   rec=recv(rtsp->sockfd,
 	   &(rtsp->rxbuf[rtsp->rxbuf_pos]),
 	   MAX_BUF-rtsp->rxbuf_pos, 0);
-  
+
   if ( rec==0 )
     return SATIP_RTSP_ERROR;
 
@@ -253,7 +253,7 @@ static int handle_response_setup(t_satip_rtsp* rtsp)
   str=strstr(rtsp->rxbuf,"\ncom.ses.streamID:");
   if ( str==NULL  || sscanf(str,"\ncom.ses.streamID: %d",&rtsp->streamid) != 1 )
     return SATIP_RTSP_ERROR;
-    
+
   DEBUG(MSG_NET,"streamid %d\n",rtsp->streamid);
 
   str=strstr(rtsp->rxbuf,"\nSession:");
@@ -265,9 +265,9 @@ static int handle_response_setup(t_satip_rtsp* rtsp)
     {
       if ( sscanf(str,";timeout= %d",&rtsp->timeout) != 1 )
 	return SATIP_RTSP_ERROR;
-	
+
       /* terminate session at ";" */
-      *str=0;	  
+      *str=0;
       DEBUG(MSG_NET,"timeout: %d\n",rtsp->timeout);
     }
 
@@ -306,7 +306,7 @@ static int send_options(t_satip_rtsp* rtsp)
 	     rtsp->session ,
 	     rtsp->session[0] ? "\r\n\r\n" : "\r\n"
 	     );
-  
+
   if ( printed >= MAX_BUF )
     return SATIP_RTSP_ERROR;
 
@@ -331,7 +331,7 @@ static int send_teardown(t_satip_rtsp* rtsp)
 	     rtsp->streamid,
 	     rtsp->cseq++,
 	     rtsp->session);
-  
+
   if ( printed >= MAX_BUF )
     return SATIP_RTSP_ERROR;
 
@@ -350,7 +350,7 @@ static int send_setup(t_satip_rtsp* rtsp)
   char* buf=rtsp->txbuf;
   int printed;
   int remain=MAX_BUF;
-  
+
   printed = snprintf(buf,remain,"SETUP rtsp://%s/?", rtsp->host);
   if ( printed >= remain )
     return SATIP_RTSP_ERROR;
@@ -376,6 +376,11 @@ static int send_setup(t_satip_rtsp* rtsp)
   printed += snprintf(buf+printed,remain-printed,"pids=none");
 #endif
 
+  /* Add PMT and CI parameters if available */
+  printed += satip_prepare_pmt_ci(rtsp->satip_config, buf+printed, remain-printed);
+  if ( printed >= remain )
+    return SATIP_RTSP_ERROR;
+
 #if 1
   printed += snprintf(buf+printed,remain-printed," RTSP/1.0\r\n"
 		      "CSeq: %d\r\n"
@@ -392,13 +397,14 @@ static int send_setup(t_satip_rtsp* rtsp)
 
   if ( printed >= remain )
     return SATIP_RTSP_ERROR;
-  
+
   DEBUG(MSG_NET,">>txbuf:\n%s\n<<\n",rtsp->txbuf);
-  
+
   if ( send(rtsp->sockfd,rtsp->txbuf,printed,0) != printed )
     return  SATIP_RTSP_ERROR ;
+  INFO(MSG_NET, "Channel URI: %s\n", buf);
 
-  return SATIP_RTSP_OK; 
+  return SATIP_RTSP_OK;
 }
 
 
@@ -412,7 +418,7 @@ static int send_play(t_satip_rtsp* rtsp)
   tuning = satip_tuning_required(rtsp->satip_config);
   pid_update = satip_pid_update_required(rtsp->satip_config);
 
-  printed = snprintf(buf,remain,"PLAY rtsp://%s/stream=%d%s", 
+  printed = snprintf(buf,remain,"PLAY rtsp://%s/stream=%d%s",
 		     rtsp->host,rtsp->streamid,
 		     (tuning || pid_update) ? "?" : "");
   if ( printed>=remain )
@@ -425,7 +431,7 @@ static int send_play(t_satip_rtsp* rtsp)
       printed += satip_prepare_tuning(rtsp->satip_config, buf+printed, remain-printed);
       if ( printed>=remain )
 	return SATIP_RTSP_ERROR;
-      
+
       printed += snprintf(buf+printed,remain-printed,"&");
 
       if ( printed >= remain )
@@ -434,12 +440,22 @@ static int send_play(t_satip_rtsp* rtsp)
       printed += satip_prepare_pids(rtsp->satip_config, buf+printed, remain-printed,0);
       if ( printed>=remain )
 	return SATIP_RTSP_ERROR;
-      
+
+      /* Add PMT and CI parameters if available */
+      printed += satip_prepare_pmt_ci(rtsp->satip_config, buf+printed, remain-printed);
+      if ( printed>=remain )
+	return SATIP_RTSP_ERROR;
+
     }
   else if (  pid_update )
     {
 
       printed += satip_prepare_pids(rtsp->satip_config, buf+printed, remain-printed,1);
+      if ( printed>=remain )
+	return SATIP_RTSP_ERROR;
+
+      /* Add PMT and CI parameters if available */
+      printed += satip_prepare_pmt_ci(rtsp->satip_config, buf+printed, remain-printed);
       if ( printed>=remain )
 	return SATIP_RTSP_ERROR;
     }
@@ -452,7 +468,7 @@ static int send_play(t_satip_rtsp* rtsp)
 #endif
 
   satip_settle_config(rtsp->satip_config);
-  
+
   printed += snprintf(buf+printed,remain-printed," RTSP/1.0\r\n"
 		      "CSeq: %d\r\n"
 		      "%s%s%s",
@@ -464,13 +480,15 @@ static int send_play(t_satip_rtsp* rtsp)
 
   if ( printed >= remain )
     return SATIP_RTSP_ERROR;
-  
+
   DEBUG(MSG_NET,">>play:\n%s\n<<\n",rtsp->txbuf);
 
   if ( send(rtsp->sockfd,rtsp->txbuf,printed,0) != printed )
     return  SATIP_RTSP_ERROR ;
 
-  return SATIP_RTSP_OK; 
+  //INFO(MSG_NET, "Send Play: Channel URI --> %s\n", buf);
+
+  return SATIP_RTSP_OK;
 }
 
 
@@ -482,39 +500,39 @@ static int connect_server(t_satip_rtsp* rtsp )
   struct addrinfo hints;
   struct addrinfo *result;
   struct addrinfo *rp;
-  
+
   memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_family = AF_UNSPEC;    /* IPv4 or IPv6 */
-  hints.ai_socktype = SOCK_STREAM; 
+  hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = 0;
-  hints.ai_protocol = 0;        
+  hints.ai_protocol = 0;
 
   s = getaddrinfo(rtsp->host, rtsp->port, &hints, &result);
   if (s != 0) {
     ERROR(MSG_NET, "getaddrinfo: %s\n", gai_strerror(s));
     return(SATIP_RTSP_ERROR);
   }
-    
-  for (rp = result; rp != NULL; rp = rp->ai_next) 
+
+  for (rp = result; rp != NULL; rp = rp->ai_next)
     {
       sockfd = socket(rp->ai_family, rp->ai_socktype,
 		      rp->ai_protocol);
       if (sockfd == -1)
 	continue;
-      
+
       flags=fcntl(sockfd,F_GETFL,0);
       fcntl(sockfd,F_SETFL,flags | O_NONBLOCK);
-  
+
       if (connect(sockfd, rp->ai_addr, rp->ai_addrlen) == -1 &&
 	  errno == EINPROGRESS )
-	break;                 
-      
+	break;
+
       close(sockfd);
     }
-  
-  if (rp == NULL) {           
+
+  if (rp == NULL) {
     DEBUG(MSG_NET, "Could not connect\n");
-    freeaddrinfo(result);   
+    freeaddrinfo(result);
     return(SATIP_RTSP_ERROR);
   }
 
@@ -532,16 +550,16 @@ int satip_rtsp_socket(t_satip_rtsp* rtsp)
 
 
 static void send_request(t_satip_rtsp* rtsp,
-			 t_rtsp_state newstate, 
+			 t_rtsp_state newstate,
 			 t_rtsp_request request,
 			 int(*sendfunc)(t_satip_rtsp*))
 {
   /* stop supervision timer*/
   polltimer_cancel(rtsp->timer_queue, rtsp->timer);
-  
+
   rtsp->request = request;
   rtsp->status  = newstate;
-  
+
   /* send request and start timer */
   if ( (*sendfunc)(rtsp) == SATIP_RTSP_OK )
     rtsp->timer = polltimer_start( rtsp->timer_queue,
@@ -556,27 +574,27 @@ static void timeout_keep_alive(void* param)
   t_satip_rtsp* rtsp=(t_satip_rtsp*)param;
 
   DEBUG(MSG_NET,"keep_alive\n");
-  
+
   /* timer expired, clear it */
   rtsp->timer = NULL;
-  
+
   send_request(rtsp, RTSP_READY, RTSP_REQ_OPTIONS, send_options);
-  
+
 }
 
 
 
 void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 {
-  if ( events & POLLHUP ) 
+  if ( events & POLLHUP )
     {
       /* connection rejected (port closed) */
       DEBUG(MSG_NET,"connection rejected\n");
       restart_connection(rtsp,0);
       return;
     }
-  
-  switch ( rtsp->status ) 
+
+  switch ( rtsp->status )
     {
     case RTSP_NOCONFIG:
       break;
@@ -591,9 +609,9 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 
     case RTSP_ESTABLISHING:
       if ( events & POLLIN )
-	{	  
+	{
 	  int ret=read_response(rtsp);
-	  
+
 	  if ( ret==SATIP_RTSP_ERROR )
 	    {
 	      DEBUG(MSG_NET,"peer closed, waiting for timeout...\n");
@@ -617,12 +635,12 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 
 	}
       break;
-      
+
     case RTSP_READY:
       if ( events & POLLIN )
-	{	  
+	{
 	  int ret=read_response(rtsp);
-	  
+
 	  if ( ret==SATIP_RTSP_ERROR )
 	    {
 	      restart_connection(rtsp,0);
@@ -634,19 +652,18 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 	      rtsp->request=RTSP_REQ_NONE;
 
 	      satip_rtsp_check_update(rtsp, 0);
-	      
+
 	      if ( rtsp->request == RTSP_REQ_NONE )
 
 		rtsp->timer = polltimer_start( rtsp->timer_queue,
 					       timeout_keep_alive,
-					       (rtsp->timeout-5)*1000,(void*)rtsp);		
+					       (rtsp->timeout-5)*1000,(void*)rtsp);
 	    }
 	  /* SATIP_RTSP_OK: response not yet complete, wait for more data.. */
-	  
 	}
       break;
 
-    default: 
+    default:
       break;
     }
 
@@ -658,8 +675,8 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 short satip_rtsp_pollflags(t_satip_rtsp* rtsp)
 {
   short flags=0;
-  
-  switch ( rtsp->status ) 
+
+  switch ( rtsp->status )
     {
     case RTSP_NOCONFIG:
       break;
@@ -672,14 +689,13 @@ short satip_rtsp_pollflags(t_satip_rtsp* rtsp)
     case RTSP_READY:
       flags = POLLHUP | POLLIN;
       break;
-      
-    default: 
-      
+
+    default:
       break;
     }
 
   return flags;
-  
+
 }
 
 
@@ -688,10 +704,10 @@ short satip_rtsp_pollflags(t_satip_rtsp* rtsp)
 void  satip_rtsp_check_update(struct satip_rtsp*  rtsp, int abort)
 {
   if (abort) rtsp->status = RTSP_ABORTING;
-  switch ( rtsp->status ) 
+  switch ( rtsp->status )
     {
     case RTSP_NOCONFIG:
-      if ( satip_valid_config(rtsp->satip_config) && 
+      if ( satip_valid_config(rtsp->satip_config) &&
 	   rtsp->timer == NULL )
 	{
 	  DEBUG(MSG_NET,"connecting...\n");
@@ -706,12 +722,12 @@ void  satip_rtsp_check_update(struct satip_rtsp*  rtsp, int abort)
 	    rtsp->status = RTSP_CONNECTING;
 	}
       break;
-      
+
     case RTSP_READY:
       if ( rtsp->request == RTSP_REQ_NONE )
 	{
-	  if ( satip_tuning_required(rtsp->satip_config) || 
-	       satip_pid_update_required(rtsp->satip_config)) 
+	  if ( satip_tuning_required(rtsp->satip_config) ||
+	       satip_pid_update_required(rtsp->satip_config))
 	    send_request(rtsp, RTSP_READY, RTSP_REQ_PLAY, send_play);
 
 	  if ( satip_close_requested(rtsp->satip_config) )
@@ -730,9 +746,8 @@ void  satip_rtsp_check_update(struct satip_rtsp*  rtsp, int abort)
     case RTSP_CONNECTING:
     case RTSP_ESTABLISHING:
       break;
-      
-    default: 
-      
+
+    default:
       break;
     }
 

@@ -123,7 +123,7 @@ typedef struct satip_config
   unsigned int      mod_type;
   t_pilots          pilots;
   unsigned int      symbol_rate;
-  t_fec_inner       fec_inner;   
+  t_fec_inner       fec_inner;
   unsigned int      inversion;
   double	    bandwidth;
   t_transmit_mode   transmission_mode;
@@ -133,8 +133,8 @@ typedef struct satip_config
   int               frontend;
 
   /* pids */
-  unsigned short    pid[SATIPCFG_MAX_PIDS];  
-  
+  unsigned short    pid[SATIPCFG_MAX_PIDS];
+
   /* delta info for addpids/delpids cmd */
   unsigned short    mod_pid[SATIPCFG_MAX_PIDS];
 
@@ -143,6 +143,13 @@ typedef struct satip_config
 
   /* tune id */
   unsigned char     tune_id;
+
+  /* PMT PIDs for decryption */
+  unsigned short    pmt_pids[SATIPCFG_MAX_PIDS];
+  int               pmt_count;
+
+  /* CI slot selection */
+  int               ci_slot;
 
 } t_satip_config;
 
@@ -174,6 +181,11 @@ int satip_pid_update_required(t_satip_config* cfg);
 
 int satip_prepare_tuning(t_satip_config* cfg, char* str, int maxlen);
 int satip_prepare_pids(t_satip_config* cfg, char* str, int maxlen,int modpid);
+int satip_prepare_pmt_ci(t_satip_config* cfg, char* str, int maxlen);
+
+int satip_add_pmt(t_satip_config* cfg, unsigned short pmt_pid);
+void satip_clear_pmt(t_satip_config* cfg);
+int satip_set_ci_slot(t_satip_config* cfg, int slot);
 
 int satip_settle_config(t_satip_config* cfg);
 void satip_clear_config(t_satip_config* cfg);
@@ -181,4 +193,3 @@ void satip_clear_config(t_satip_config* cfg);
 void satip_close(t_satip_config* cfg);
 int satip_close_requested(t_satip_config* cfg);
 #endif
-

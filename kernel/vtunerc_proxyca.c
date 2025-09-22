@@ -16,6 +16,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/vmalloc.h>
 #include <media/dvb_ringbuffer.h>
 
 #include "vtunerc_priv.h"
