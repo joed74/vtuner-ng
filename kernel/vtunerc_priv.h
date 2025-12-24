@@ -138,4 +138,6 @@ if (ctx->config) 			                        \
 if (ctx->config)                                                \
         pr_debug(KERN_CONT fmt, ##arg);  \
 } while (0)
+int param_set_hex(const char *val, const struct kernel_param *kp);
+int param_get_hex(char *buffer, const struct kernel_param *kp);
 #endif
