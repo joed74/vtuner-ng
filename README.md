@@ -14,11 +14,11 @@ The frontend acts as "provider" for DVBS,DVBS2,DVBC and DVBT
 
 Controlling:
 
-    /dev/vtunerX
+    /dev/vtunercX
 
-where X is ordered by driver installation.
+where X is ordered by driver installation (e.g. /dev/vtunerc0).
 
 It is possible to cat the received TS stream with
 
-    cat /dev/vtunerX > stream.ts
+    cat /dev/vtunerc0 > stream.ts
 
