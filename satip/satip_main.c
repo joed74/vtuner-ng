@@ -166,11 +166,12 @@ void hangup(int sig)
 void usage(char *name)
 {
   fprintf(stderr,
-     "usage: %s -s satip_receiver [-p 554] [-d /dev/vtunercX] [-D delsys[,delsys]] [-f satip_frontend] [-l level] [-m mask] [-r fixed_rtp_port] [-u user]\n"
-     "  -s\tip or hostname of satip receiver\n"
+     "usage: %s -s satip_receiver [options]\n\n"
      "  -p\tport of satip receiver (defaults to 554)\n"
      "  -d\tvtuner device (defaults to /dev/vtunerc0)\n"
      "  -D\tvtuner frontend delivery system, values: DVBS DVBS2 DVBT DVBT2 DVBC DVBC_B DVBC_C (defaults to all)\n"
+     "  -Cn\tvtuner CA ids in hex for slot n, e.g. 0xd98,0x98c (defaults to none)\n"
+     "  -Sn\tvtuner CA sids for slot n, e.g. 4911,5301 (defaults to none)\n"
      "  -f\tfrontend on satip receiver, number between 1 to N (defaults to let receiver decide)\n"
      "  -l\tloglevel: 1 = error, 2 = warnings, 3 = info, 4 = debug (defaults to error)\n"
      "  -m\tmask for logs: 1 = main, 2 = net, 4 = data, 7 = all (defaults to main + net)\n"
@@ -188,6 +189,8 @@ int main(int argc, char** argv)
   char* device = "/dev/vtunerc0";
   char* delsys = NULL;
   char* user = NULL;
+  char* caids[VTUNER_MAX_SLOTS] = {};
+  char* sids[VTUNER_MAX_SLOTS] = {};
   int frontend = -1;
   int fixed_rtp_port = -1;
 
@@ -206,7 +209,11 @@ int main(int argc, char** argv)
   signal(SIGINT, hangup);
   signal(SIGTERM, hangup);
 
-  while((opt = getopt(argc, argv, "s:Tp:d:D:f:m:l:r:u:h::")) != -1 ) {
+  char optfmt[80] = "s:Tp:d:D:f:m:l:r:u:h::SC";
+  for (int i=0; i<VTUNER_MAX_SLOTS;i++) optfmt[24+i]=48+i;
+
+
+  while((opt = getopt(argc, argv, optfmt)) != -1 ) {
     switch(opt) 
       {
       case 'h': 
@@ -253,7 +260,34 @@ int main(int argc, char** argv)
 	user = optarg;
 	break;
 
+      case 'C':
+	if (argv[optind] && argv[optind+1] && argv[optind+1][0]!='-') {
+		char *endptr;
+		int slot = strtol(&argv[optind][2], &endptr, 10);
+		if (*endptr == 0) {
+			caids[slot]=argv[optind+1];
+		}
+	}
+	break;
+
+      case 'S':
+	if (argv[optind] && argv[optind+1] && argv[optind+1][0]!='-') {
+		char *endptr;
+		int slot = strtol(&argv[optind][2], &endptr, 10);
+		if (*endptr == 0) {
+			sids[slot]=argv[optind+1];
+		}
+	}
+	break;
+
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+	break;
+
       default:
+	usage(argv[0]);
 	exit(1);	
       }
   }
@@ -289,7 +323,7 @@ int main(int argc, char** argv)
 
   } else {
 
-    satvt = satip_vtuner_new( device, delsys, satconf );
+    satvt = satip_vtuner_new( device, delsys, caids, sids, satconf );
   
     if ( satvt == NULL )
       {

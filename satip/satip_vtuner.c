@@ -46,7 +46,7 @@ typedef struct satip_vtuner
   t_satip_config *satip_cfg;
 } t_satip_vtuner;
 
-t_satip_vtuner *satip_vtuner_new(char *devname, char *delsys, t_satip_config *satip_cfg)
+t_satip_vtuner *satip_vtuner_new(char *devname, char *delsys, char *caids[VTUNER_MAX_SLOTS], char *sids[VTUNER_MAX_SLOTS], t_satip_config *satip_cfg)
 {
   int fd;
   t_satip_vtuner *vt;
@@ -96,6 +96,52 @@ t_satip_vtuner *satip_vtuner_new(char *devname, char *delsys, t_satip_config *sa
         break;
     }
     ioctl(fd, VTUNER_SET_DELSYS, &vt_delsys);
+  }
+
+  if (caids != NULL)
+  {
+     // set caids
+     for (int slot=0; slot<VTUNER_MAX_SLOTS; slot++)
+     {
+        int i=0;
+        struct vtuner_caids vt_caids;
+	memset(&vt_caids, 0, sizeof(struct vtuner_caids));
+	vt_caids.slot = (ushort) slot;
+        char *token = strtok(caids[slot], ",");
+        while (token != NULL)
+	{
+	   char *endptr;
+	   int number = strtol(token, &endptr, 0);
+	   if (*endptr==0) vt_caids.value[i++]=(ushort) number;
+	   token = strtok(NULL, ",");
+	   if (i > VTUNER_MAX_CAIDS)
+             break;
+	}
+        ioctl(fd, VTUNER_SET_CAIDS, &vt_caids);
+     }
+  }
+
+  if (sids != NULL)
+  {
+     // set sids
+     for (int slot=0; slot<VTUNER_MAX_SLOTS; slot++)
+     {
+        int i=0;
+        struct vtuner_sids vt_sids;
+        memset(&vt_sids, 0, sizeof(struct vtuner_sids));
+        vt_sids.slot = (ushort) slot;
+        char *token = strtok(sids[slot], ",");
+        while (token != NULL)
+	{
+	   char *endptr;
+	   int number = strtol(token, &endptr, 10);
+	   if (*endptr==0) vt_sids.value[i++]=(ushort) number;
+	   token = strtok(NULL, ",");
+	   if (i > VTUNER_MAX_SIDS)
+	     break;
+	}
+	ioctl(fd, VTUNER_SET_SIDS, &vt_sids);
+     }
   }
 
   return vt;

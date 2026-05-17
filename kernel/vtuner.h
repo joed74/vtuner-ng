@@ -154,12 +154,29 @@ struct vtuner_delsys {
 	u8 value[VTUNER_MAX_DELSYS];
 } __attribute__ ((packed));
 
+#define VTUNER_MAX_SLOTS 4
+
+#define VTUNER_MAX_CAIDS 10
+
+struct vtuner_caids {
+	u16 slot;
+	u16 value[VTUNER_MAX_CAIDS];
+} __attribute__ ((packed));
+
+#define VTUNER_MAX_SIDS 10
+
+struct vtuner_sids {
+	u16 slot;
+	u16 value[VTUNER_MAX_SIDS];
+} __attribute__ ((packed));
+
 #define VTUNER_MAJOR		226
 
 #define VTUNER_GET_MESSAGE	_IOR(VTUNER_MAJOR, 1, struct vtuner_message)
 #define VTUNER_SET_RESPONSE 	_IOW(VTUNER_MAJOR, 2, struct vtuner_message)
 #define VTUNER_SET_SIGNAL	_IOW(VTUNER_MAJOR, 3, struct vtuner_signal)
 #define VTUNER_SET_DELSYS	_IOW(VTUNER_MAJOR, 4, struct vtuner_delsys)
-
+#define VTUNER_SET_CAIDS	_IOW(VTUNER_MAJOR, 5, struct vtuner_caids)
+#define VTUNER_SET_SIDS		_IOW(VTUNER_MAJOR, 6, struct vtuner_sids)
 #endif
 

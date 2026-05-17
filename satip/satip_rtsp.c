@@ -149,7 +149,8 @@ static void timeout_reconnect(void* param)
   /* timer expired, clear it */
   rtsp->timer = NULL;
 
-  send_teardown(rtsp);
+  if (rtsp->streamid>0) send_teardown(rtsp);
+  sleep(5);
   restart_connection(rtsp,1);
 }
 
@@ -198,7 +199,7 @@ static void restart_connection(t_satip_rtsp* rtsp,int now)
       /* attempt again after some time*/
       rtsp->timer = polltimer_start( rtsp->timer_queue,
 				     timeout_reconnect,
-				     2000,(void*)rtsp);
+				     5000,(void*)rtsp);
     }
 }
 
@@ -560,6 +561,8 @@ static void send_request(t_satip_rtsp* rtsp,
   rtsp->request = request;
   rtsp->status  = newstate;
 
+  if (request == RTSP_REQ_TEARDOWN && rtsp->streamid<0) return;
+
   /* send request and start timer */
   if ( (*sendfunc)(rtsp) == SATIP_RTSP_OK )
     rtsp->timer = polltimer_start( rtsp->timer_queue,
@@ -616,7 +619,7 @@ void satip_rtsp_pollevents(t_satip_rtsp* rtsp, short events)
 	    {
 	      DEBUG(MSG_NET,"peer closed, waiting for timeout...\n");
               sleep(65);
-	      restart_connection(rtsp,0);
+	      restart_connection(rtsp,1);
 	    }
 	  else if ( ret==SATIP_RTSP_COMPLETE )
 	    {

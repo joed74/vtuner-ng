@@ -50,11 +50,7 @@ static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 /* module params */
 static struct vtunerc_config config = {
 	.devices = 1,
-	.timeout = 0,
-	.caids0 = {},
-	.caids1 = {},
-	.sids0 = {},
-	.sids1 = {}
+	.timeout = 0
 };
 
 int feedtab_find_pid(struct vtunerc_ctx *ctx, int pid)
@@ -493,7 +489,7 @@ static void sectiontable2str(struct seq_file *seq, int id)
 
 static int vtunerc_read_proc(struct seq_file *seq, void *v)
 {
-	int pcnt = 0, slot;
+	int pcnt = 0, slot, i, hdr;
 	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)seq->private;
 	struct vtunerc_cainfo *ca;
 	struct vtunerc_feedinfo *fi;
@@ -528,13 +524,22 @@ static int vtunerc_read_proc(struct seq_file *seq, void *v)
 				seq_printf(seq, " frequency        : %i\n", fep->frequency / 1000000);
 			}
 			if (ctx->pubca.data) {
-				for (slot=0; slot<2; slot++) {
+				for (slot=0; slot<VTUNER_MAX_SLOTS; slot++) {
 					ca = vtunerc_ca_get(ctx, slot);
 					if (ca) {
 						if (ca->service)
-							seq_printf(seq, " cam #%i           : %i-SID %i-PID %i-PMT\n", slot, ca->service, ca->pid, ca->pmt);
+							seq_printf(seq, " cam #%i           : %i-SID %i-PID %i-PMT", slot, ca->service, ca->pid, ca->pmt);
 						else
-							seq_printf(seq, " cam #%i           : unused\n", slot);
+							seq_printf(seq, " cam #%i           : unused", slot);
+						hdr=0;
+						for (i=0; i<VTUNER_MAX_CAIDS; i++) {
+							if (ca->caids[i]!=0) {
+								seq_printf(seq,"%s0x%04x", hdr ? " " : " (", ca->caids[i]);
+								hdr=1;
+							}
+						}
+						if (hdr) seq_printf(seq, ")");
+						seq_printf(seq, "\n");
 					}
 					else
 						seq_printf(seq, " cam #%i           : disabled\n", slot);
@@ -801,25 +806,6 @@ static void __exit vtunerc_exit(void)
 	printk(KERN_NOTICE "vtunerc: unloaded successfully\n");
 }
 
-// Set hexadecimal parameter
-int param_set_hex(const char *val, const struct kernel_param *kp)
-{
-    return kstrtou16(val, 16, (unsigned short*)kp->arg);
-}
-// Read hexadecimal parameter
-int param_get_hex(char *buffer, const struct kernel_param *kp)
-{
-    return scnprintf(buffer, PAGE_SIZE, "%lx", *((unsigned long*)kp->arg));
-}
-
-// Combine operations together
-const struct kernel_param_ops param_ops_hex = {
-    .set = param_set_hex,
-    .get = param_get_hex
-};
-
-#define param_check_hex(name, p) __param_check(name, p, unsigned short)
-
 module_init(vtunerc_init);
 module_exit(vtunerc_exit);
 
@@ -828,20 +814,8 @@ MODULE_DESCRIPTION("virtual DVB device");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(VTUNERC_MODULE_VERSION);
 
-module_param_named(devices, config.devices, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+module_param_named(devices, config.devices, int, S_IRUSR | S_IRGRP | S_IROTH);
 MODULE_PARM_DESC(devices, "Number of virtual adapters (default is 1)");
 
-module_param_named(timeout, config.timeout, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+module_param_named(timeout, config.timeout, int, S_IRUSR | S_IRGRP | S_IROTH);
 MODULE_PARM_DESC(timeout, "Timeout for closing frontends when only section streams are transmitted (default is 0 = disabled)");
-
-module_param_array_named(caids0, config.caids0, hex, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(caids0, "CAIDs of emulated CAM0 (default empty = disabled)");
-
-module_param_array_named(caids1, config.caids1, hex, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(caids1, "CAIDs of emulated CAM1 (default empty = disabled)");
-
-module_param_array_named(sids0, config.sids0, ushort, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(sids0, "ServiceIds of emulated CAM0 (default empty = all)");
-
-module_param_array_named(sids1, config.sids1, ushort, NULL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-MODULE_PARM_DESC(sids1, "ServiceIds of emulated CAM1 (default empty = all)");

@@ -298,19 +298,13 @@ int vtunerc_ca_send_session_request(u8 *buf, u8 slot, u8 tcid, u32 resource_id)
 	return 11;
 }
 
-int vtunerc_ca_send_ca_info(int slot, u8 *ebuf, u8 *rbuf, struct vtunerc_config *config)
+int vtunerc_ca_send_ca_info(u8 *ebuf, u8 *rbuf, struct vtunerc_cainfo *info)
 {
 	int ptr, i, caids=0;
 	u16 swapped;
 
-	if (slot==0) {
-		for (i=0; i<sizeof(config->caids0)/2; i++) {
-			if (config->caids0[i]!=0) caids++;
-		}
-	} else {
-		for (i=0; i<sizeof(config->caids1)/2; i++) {
-			if (config->caids1[i]!=0) caids++;
-		}
+	for (i=0; i<sizeof(info->caids)/2; i++) {
+		if (info->caids[i]!=0) caids++;
 	}
 
 	// copy most of request
@@ -318,27 +312,17 @@ int vtunerc_ca_send_ca_info(int slot, u8 *ebuf, u8 *rbuf, struct vtunerc_config 
 	ebuf[11]=0x31; // AOT_CA_INFO
 	ebuf[12]=caids*2;
 	ptr=13;
-	if (slot==0) {
-		for (i=0; i<sizeof(config->caids0)/2; i++) {
-			if (config->caids0[i]!=0) {
-				swapped = cpu_to_be16(config->caids0[i]);
-				memcpy(&ebuf[ptr], &swapped, 2);
-				ptr+=2;
-			}
-		}
-	} else {
-		for (i=0; i<sizeof(config->caids1)/2; i++) {
-			if (config->caids1[i]!=0) {
-				swapped = cpu_to_be16(config->caids1[i]);
-				memcpy(&ebuf[ptr], &swapped, 2);
-				ptr+=2;
-			}
+	for (i=0; i<sizeof(info->caids)/2; i++) {
+		if (info->caids[i]!=0) {
+			swapped = cpu_to_be16(info->caids[i]);
+			memcpy(&ebuf[ptr], &swapped, 2);
+			ptr+=2;
 		}
 	}
 	return ptr;
 }
 
-int vtunerc_ca_send_pmt_reply(int slot, u8 *ebuf, u8 *rbuf, bool can_decrypt, struct vtunerc_config *config)
+int vtunerc_ca_send_pmt_reply(u8 *ebuf, u8 *rbuf, bool can_decrypt, struct vtunerc_cainfo *info)
 {
 	bool sidfound=false;
 	bool sidsempty=true;
@@ -353,19 +337,10 @@ int vtunerc_ca_send_pmt_reply(int slot, u8 *ebuf, u8 *rbuf, bool can_decrypt, st
 	ebuf[14]=rbuf[15];
 	ebuf[15]=rbuf[16]; // version_number + current_next_indicator
 	if (can_decrypt) {
-		if (slot==0) {
-			for (i=0; i<sizeof(config->sids0)/2; i++) {
-				if (config->sids0[i]!=0) {
-					sidsempty=false;
-					if (config->sids0[i]==sid) sidfound=true;
-				}
-			}
-		} else {
-			for (i=0; i<sizeof(config->sids1)/2; i++) {
-				if (config->sids1[i]!=0) {
-					sidsempty=false;
-					if (config->sids1[i]==sid) sidfound=true;
-				}
+		for (i=0; i<sizeof(info->sids)/2; i++) {
+			if (info->sids[i]!=0) {
+				sidsempty=false;
+				if (info->sids[i]==sid) sidfound=true;
 			}
 		}
 		if (sidsempty || sidfound)
@@ -454,7 +429,7 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 				switch (aot) {
 					case AOT_CA_INFO_ENQ:
 						dprintk(priv->ctx,"CAM %i: answer ca_info_enq\n", slot);
-						ecount=vtunerc_ca_send_ca_info(slot, ebuf, (u8*) &rbuffer, priv->ctx->config);
+						ecount=vtunerc_ca_send_ca_info(ebuf, (u8*) &rbuffer, &sl->info);
 						if (ecount<=13) sl->can_decrypt=false; else sl->can_decrypt=true;
 						break;
 					case AOT_CA_PMT:
@@ -496,7 +471,7 @@ int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecou
 								}
 								if (rbuffer[19+length_field+length_field_p]==0x03) {
 									dprintk(priv->ctx, "CAM %i: answer ca_pmt %s\n", slot, sl->can_decrypt ? "true" : "false");
-									ecount=vtunerc_ca_send_pmt_reply(slot, ebuf, (u8 *) &rbuffer, sl->can_decrypt, priv->ctx->config);
+									ecount=vtunerc_ca_send_pmt_reply(ebuf, (u8 *) &rbuffer, sl->can_decrypt, &sl->info);
 								}
 							} else {
 								if (pmt->list_management==0x04 && pmt->program_number) {
@@ -582,6 +557,13 @@ int vtunerc_ca_slot_ts_enable(struct dvb_ca_en50221 *ca, int slot)
 	return 0;
 }
 
+int vtunerc_ca_slot_status(struct dvb_ca_en50221 *ca, int slot, int open)
+{
+	struct vtunerc_ca_private *priv = ca->data;
+	dprintk(priv->ctx, "CAM %i: get slot status (open=%i)\n", slot, open);
+	return 0;
+}
+
 int vtunerc_ca_insert(struct vtunerc_ctx *ctx, int slot)
 {
 	dvb_ca_en50221_camchange_irq(&ctx->pubca, slot, DVB_CA_EN50221_CAMCHANGE_INSERTED);
@@ -632,42 +614,12 @@ struct vtunerc_cainfo *vtunerc_ca_get(struct vtunerc_ctx *ctx, int slot)
 
 int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 {
-	int slot_count = 0;
+	const int slot_count = VTUNER_MAX_SLOTS;
 	int ret;
 	int i;
-	bool enable0=false;
-	bool enable1=false;
 	struct vtunerc_ca_private *ca = NULL;
 	struct vtunerc_ca_slot *sl;
 	void *buf;
-
-	for (i=0; i<sizeof(ctx->config->caids0)/2; i++)
-	{
-		if (ctx->config->caids0[i]!=0) {
-			if (!enable0) printk(KERN_INFO "vtunerc%d: found caids", ctx->idx);
-			printk(KERN_CONT " %04x", ctx->config->caids0[i]);
-			enable0 = true;
-		}
-	}
-	if (enable0) printk(KERN_CONT " for CAM slot0\n");
-
-        for (i=0; i<sizeof(ctx->config->caids1)/2; i++)
-        {
-                if (ctx->config->caids1[i]!=0) {
-                        if (!enable1) printk(KERN_INFO "vtunerc%d: found caids", ctx->idx);
-                        printk(KERN_CONT " %04x", ctx->config->caids1[i]);
-                        enable1 = true;
-                }
-        }
-        if (enable1) printk(KERN_CONT " for CAM slot1\n");
-
-	if (!enable0 && !enable1) {
-		printk(KERN_INFO "vtunerc%d: no caids found, cam disabled\n", ctx->idx);
-		return 0;
-	}
-
-	if (enable0) slot_count++;
-	if (enable1) slot_count++;
 
 	ca = kzalloc(sizeof(*ca), GFP_KERNEL);
 	if (!ca) return -ENOMEM;
@@ -702,6 +654,7 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 	ctx->pubca.slot_reset = vtunerc_ca_slot_reset;
 	ctx->pubca.slot_shutdown = vtunerc_ca_slot_shutdown;
 	ctx->pubca.slot_ts_enable = vtunerc_ca_slot_ts_enable;
+	ctx->pubca.poll_slot_status = vtunerc_ca_slot_status;
 	ret = dvb_ca_en50221_init(&ctx->dvb_adapter, &ctx->pubca,
 			DVB_CA_EN50221_FLAG_IRQ_CAMCHANGE |
 			DVB_CA_EN50221_FLAG_IRQ_FR |
@@ -710,7 +663,7 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 	for (i=0; i < slot_count; i++) {
 		sl = &ca->slot_info[i];
 		dvb_ca_en50221_frda_irq(&ctx->pubca, i); // enable "irq"
-		if (sl->rbuf.data) vtunerc_ca_insert(ctx, i);
+		//if (sl->rbuf.data) vtunerc_ca_insert(ctx, i);
 	}
 	return ret;
 }

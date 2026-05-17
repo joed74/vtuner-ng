@@ -192,7 +192,7 @@ int satip_set_dvbs(t_satip_config* cfg, unsigned int freq, t_polarization pol, u
   cfg->delsys = SYS_DVBS;
   cfg->frequency = freq;
   cfg->polarization = pol;
-  cfg->mod_type = modtype;
+  cfg->mod_type = modtype & 0;
   cfg->symbol_rate = symrate;
   cfg->fec_inner = fecinner;
   cfg->status = SATIPCFG_CHANGED;

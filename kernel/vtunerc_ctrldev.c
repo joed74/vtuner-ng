@@ -31,6 +31,8 @@
 #define VTUNER_SIG_LEN (sizeof(struct vtuner_signal))
 #define VTUNER_DELSYS_LEN (sizeof(struct vtuner_delsys))
 #define KERNEL_DELSYS_LEN (sizeof(((struct dvb_frontend_ops *)0)->delsys))
+#define VTUNER_CAIDS_LEN (sizeof(struct vtuner_caids))
+#define VTUNER_SIDS_LEN (sizeof(struct vtuner_sids))
 
 static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
@@ -276,7 +278,10 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 {
 	struct vtunerc_ctx *ctx = file->private_data;
 	struct vtuner_delsys delsys;
-	int ret = 0, i;
+	struct vtunerc_cainfo *ca = NULL;
+	struct vtuner_caids caids;
+	struct vtuner_sids sids;
+	int ret = 0, i, hdr;
 
 	if (down_interruptible(&ctx->ioctl_sem))
 		return -ERESTARTSYS;
@@ -361,6 +366,53 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd, unsigned 
 				}
 			}
 			printk(KERN_CONT "\n");
+		}
+		break;
+
+	case VTUNER_SET_CAIDS:
+		if (copy_from_user(&caids, (char *) arg, VTUNER_CAIDS_LEN)) {
+			ret = -EFAULT;
+		}
+		if (caids.slot>VTUNER_MAX_SLOTS-1) ret = -EINVAL;
+		if (ret==0) ca = vtunerc_ca_get(ctx, caids.slot);
+		if (ca) {
+			memcpy(&ca->caids, &caids.value[0], VTUNER_MAX_CAIDS*sizeof(u16));
+			hdr=0;
+			for (i=0; i<VTUNER_MAX_CAIDS; i++) {
+				if (ca->caids[i]!=0) {
+					if (!hdr) printk(KERN_INFO "vtunerc%d: setting caids of CAM %i to", ctx->idx, ca->slot);
+					printk(KERN_CONT " 0x%04x", ca->caids[i]);
+					hdr=1;
+				}
+			}
+			if (hdr) {
+				printk(KERN_CONT "\n");
+				vtunerc_ca_insert(ctx, ca->slot);
+			}
+		} else {
+			ret = -EFAULT;
+		}
+	        break;
+
+	case VTUNER_SET_SIDS:
+		if (copy_from_user(&sids, (char *) arg, VTUNER_SIDS_LEN)) {
+			ret = -EFAULT;
+		}
+		if (sids.slot>VTUNER_MAX_SLOTS-1) ret = -EINVAL;
+		if (ret==0) ca = vtunerc_ca_get(ctx, sids.slot);
+		if (ca) {
+			memcpy(&ca->sids, &sids.value[0], VTUNER_MAX_SIDS*sizeof(u16));
+			hdr=0;
+			for (i=0; i<VTUNER_MAX_SIDS; i++) {
+				if (ca->sids[i]!=0) {
+					if (!hdr) printk(KERN_INFO "vtunerc%d: setting sids of CAM %i to", ctx->idx, ca->slot);
+					printk(KERN_CONT " %04d", ca->sids[i]);
+					hdr=1;
+				}
+			}
+			if (hdr) printk(KERN_CONT "\n");
+		} else {
+			ret = -EFAULT;
 		}
 		break;
 

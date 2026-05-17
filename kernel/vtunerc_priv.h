@@ -42,10 +42,6 @@
 struct vtunerc_config {
 	int timeout;
 	int devices;
-	ushort caids0[10];
-	ushort caids1[10];
-	ushort sids0[10];
-	ushort sids1[10];
 };
 
 struct vtunerc_feedinfo {
@@ -60,6 +56,8 @@ struct vtunerc_cainfo {
 	u16 pmt;
 	u16 pmt_last;
 	u16 pid;
+	u16 caids[VTUNER_MAX_CAIDS];
+	u16 sids[VTUNER_MAX_SIDS];
 };
 
 struct vtunerc_ctx {
@@ -120,6 +118,7 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ca_init(struct vtunerc_ctx *ctx);
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx);
+int vtunerc_ca_insert(struct vtunerc_ctx *ctx, int slot);
 struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int service);
 struct vtunerc_cainfo *vtunerc_ca_get(struct vtunerc_ctx *ctx, int slot);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);
@@ -138,6 +137,4 @@ if (ctx->config) 			                        \
 if (ctx->config)                                                \
         pr_debug(KERN_CONT fmt, ##arg);  \
 } while (0)
-int param_set_hex(const char *val, const struct kernel_param *kp);
-int param_get_hex(char *buffer, const struct kernel_param *kp);
 #endif
