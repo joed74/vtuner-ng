@@ -5,6 +5,7 @@ Driver is registering the following devices:
 
 DVB:
 
+    /dev/dvb/adapterX/ca0
     /dev/dvb/adapterX/demux0
     /dev/dvb/adapterX/dvr0
     /dev/dvb/adapterX/frontend0
