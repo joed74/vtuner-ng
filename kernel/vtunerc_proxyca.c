@@ -661,9 +661,7 @@ int vtunerc_ca_init(struct vtunerc_ctx *ctx)
 			DVB_CA_EN50221_FLAG_IRQ_DA, slot_count);
 
 	for (i=0; i < slot_count; i++) {
-		sl = &ca->slot_info[i];
 		dvb_ca_en50221_frda_irq(&ctx->pubca, i); // enable "irq"
-		//if (sl->rbuf.data) vtunerc_ca_insert(ctx, i);
 	}
 	return ret;
 }

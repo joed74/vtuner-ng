@@ -103,6 +103,7 @@ t_satip_vtuner *satip_vtuner_new(char *devname, char *delsys, char *caids[VTUNER
      // set caids
      for (int slot=0; slot<VTUNER_MAX_SLOTS; slot++)
      {
+        if (!caids[slot]) continue;
         int i=0;
         struct vtuner_caids vt_caids;
 	memset(&vt_caids, 0, sizeof(struct vtuner_caids));
@@ -126,6 +127,7 @@ t_satip_vtuner *satip_vtuner_new(char *devname, char *delsys, char *caids[VTUNER
      // set sids
      for (int slot=0; slot<VTUNER_MAX_SLOTS; slot++)
      {
+        if (!sids[slot]) continue;
         int i=0;
         struct vtuner_sids vt_sids;
         memset(&vt_sids, 0, sizeof(struct vtuner_sids));

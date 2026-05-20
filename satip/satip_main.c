@@ -189,8 +189,8 @@ int main(int argc, char** argv)
   char* device = "/dev/vtunerc0";
   char* delsys = NULL;
   char* user = NULL;
-  char* caids[VTUNER_MAX_SLOTS] = {};
-  char* sids[VTUNER_MAX_SLOTS] = {};
+  char* caids[VTUNER_MAX_CAIDS] = {};
+  char* sids[VTUNER_MAX_SIDS] = {};
   int frontend = -1;
   int fixed_rtp_port = -1;
 
