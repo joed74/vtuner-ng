@@ -119,6 +119,7 @@ int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ca_init(struct vtunerc_ctx *ctx);
 int vtunerc_ca_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ca_insert(struct vtunerc_ctx *ctx, int slot);
+int vtunerc_ca_remove(struct vtunerc_ctx *ctx, int slot);
 struct vtunerc_cainfo *vtunerc_ca_find(struct vtunerc_ctx *ctx, int pid, int service);
 struct vtunerc_cainfo *vtunerc_ca_get(struct vtunerc_ctx *ctx, int slot);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx, struct vtuner_message *msg, int wait4response);

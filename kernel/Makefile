@@ -15,6 +15,7 @@ ccflags-y += -Idrivers/media/dvb-frontends
 ccflags-y += -Idrivers/media/tuners
 ccflags-y += -Iinclude/media
 ccflags-y += -DVTUNERC_MAX_ADAPTERS=$(VTUNERC_MAX_ADAPTERS)
+ccflags-y += -Werror=missing-prototypes -Werror
 
 # for external compilation
 ifeq ($(shell make -sC /usr/src/linux kernelversion 2> /dev/null),)

@@ -212,7 +212,7 @@ void dvb_ringbuffer_pkt_dispose(struct dvb_ringbuffer *rbuf, size_t idx)
 	}
 }
 
-int vtunerc_ca_read_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int address)
+static int vtunerc_ca_read_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int address)
 {
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
@@ -224,7 +224,7 @@ int vtunerc_ca_read_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addre
 	return sl->tuple_mem[myaddress];
 }
 
-int vtunerc_ca_write_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int address, u8 value)
+static int vtunerc_ca_write_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int address, u8 value)
 {
 	struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
@@ -237,7 +237,7 @@ int vtunerc_ca_write_attribute_mem(struct dvb_ca_en50221 *ca, int slot, int addr
 	return 0;
 }
 
-int vtunerc_ca_read_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address)
+static int vtunerc_ca_read_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address)
 {
 	struct vtunerc_ca_private *priv = ca->data;
 	struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
@@ -250,7 +250,7 @@ int vtunerc_ca_read_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address)
 	return -EIO;
 }
 
-int vtunerc_ca_write_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address, u8 value)
+static int vtunerc_ca_write_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address, u8 value)
 {
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
@@ -263,7 +263,7 @@ int vtunerc_ca_write_cam_control(struct dvb_ca_en50221 *ca, int slot, u8 address
 	return 0;
 }
 
-int vtunerc_ca_send_ctc_reply(u8 *buf, u8 slot, u8 tcid)
+static int vtunerc_ca_send_ctc_reply(u8 *buf, u8 slot, u8 tcid)
 {
 	buf[0]=slot;
 	buf[1]=tcid;
@@ -273,7 +273,7 @@ int vtunerc_ca_send_ctc_reply(u8 *buf, u8 slot, u8 tcid)
 	return 5;
 }
 
-int vtunerc_ca_send_sb_reply(u8 *buf, u8 slot, u8 tcid)
+static int vtunerc_ca_send_sb_reply(u8 *buf, u8 slot, u8 tcid)
 {
 	buf[0]=slot;
 	buf[1]=tcid;
@@ -283,7 +283,7 @@ int vtunerc_ca_send_sb_reply(u8 *buf, u8 slot, u8 tcid)
 	return 5;
 }
 
-int vtunerc_ca_send_session_request(u8 *buf, u8 slot, u8 tcid, u32 resource_id)
+static int vtunerc_ca_send_session_request(u8 *buf, u8 slot, u8 tcid, u32 resource_id)
 {
 	u32 swapped_id = cpu_to_be32(resource_id);
 
@@ -298,7 +298,7 @@ int vtunerc_ca_send_session_request(u8 *buf, u8 slot, u8 tcid, u32 resource_id)
 	return 11;
 }
 
-int vtunerc_ca_send_ca_info(u8 *ebuf, u8 *rbuf, struct vtunerc_cainfo *info)
+static int vtunerc_ca_send_ca_info(u8 *ebuf, u8 *rbuf, struct vtunerc_cainfo *info)
 {
 	int ptr, i, caids=0;
 	u16 swapped;
@@ -322,7 +322,7 @@ int vtunerc_ca_send_ca_info(u8 *ebuf, u8 *rbuf, struct vtunerc_cainfo *info)
 	return ptr;
 }
 
-int vtunerc_ca_send_pmt_reply(u8 *ebuf, u8 *rbuf, bool can_decrypt, struct vtunerc_cainfo *info)
+static int vtunerc_ca_send_pmt_reply(u8 *ebuf, u8 *rbuf, bool can_decrypt, struct vtunerc_cainfo *info)
 {
 	bool sidfound=false;
 	bool sidsempty=true;
@@ -353,7 +353,7 @@ int vtunerc_ca_send_pmt_reply(u8 *ebuf, u8 *rbuf, bool can_decrypt, struct vtune
 	return 17;
 }
 
-int vtunerc_ca_send_app_info(u8 *ebuf, u8 *rbuf)
+static int vtunerc_ca_send_app_info(u8 *ebuf, u8 *rbuf)
 {
 	// copy most of request
 	memcpy(ebuf, rbuf, 12);
@@ -377,7 +377,7 @@ int vtunerc_ca_send_app_info(u8 *ebuf, u8 *rbuf)
 	return 28;
 }
 
-int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecount)
+static int vtunerc_ca_read_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, int ecount)
 {
         struct vtunerc_ca_private *priv = ca->data;
         struct vtunerc_ca_slot *sl = &priv->slot_info[slot];
@@ -520,13 +520,13 @@ static int vtunerc_ca_write_data(struct dvb_ca_en50221 *ca, int slot, u8 *ebuf, 
 	return ecount;
 }
 
-int vtunerc_ca_slot_reset(struct dvb_ca_en50221 *ca, int slot)
+static int vtunerc_ca_slot_reset(struct dvb_ca_en50221 *ca, int slot)
 {
 	dvb_ca_en50221_camready_irq(ca, slot);
 	return 0;
 }
 
-int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
+static int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 {
 	int idx;
 	size_t pktlen;
@@ -552,12 +552,12 @@ int vtunerc_ca_slot_shutdown(struct dvb_ca_en50221 *ca, int slot)
 	return 0;
 }
 
-int vtunerc_ca_slot_ts_enable(struct dvb_ca_en50221 *ca, int slot)
+static int vtunerc_ca_slot_ts_enable(struct dvb_ca_en50221 *ca, int slot)
 {
 	return 0;
 }
 
-int vtunerc_ca_slot_status(struct dvb_ca_en50221 *ca, int slot, int open)
+static int vtunerc_ca_slot_status(struct dvb_ca_en50221 *ca, int slot, int open)
 {
 	struct vtunerc_ca_private *priv = ca->data;
 	dprintk(priv->ctx, "CAM %i: get slot status (open=%i)\n", slot, open);
